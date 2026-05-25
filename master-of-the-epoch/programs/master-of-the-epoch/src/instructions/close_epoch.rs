@@ -13,8 +13,6 @@ pub struct CloseEpoch<'info> {
     /// The final (current) master's record.
     /// Their last reign has not yet been committed to total_reign_time — we
     /// add it here when computing the winner.
-    /// Seeds are derived from epoch_state.current_master, which is valid because
-    /// epoch_end != 0 implies at least one claim was made (current_master != default).
     #[account(
         seeds = [MASTER_RECORD_SEED, epoch_state.current_master.as_ref()],
         bump = current_master_record.bump,
@@ -30,14 +28,14 @@ pub struct CloseEpoch<'info> {
     #[account(mut)]
     pub winner: UncheckedAccount<'info>,
 
-    /// Must match epoch_state.treasury — validated in handler.
-    /// CHECK: validated against epoch_state.treasury in handler
-    #[account(mut)]
+    /// Must match epoch_state.treasury — enforced by address constraint.
+    /// CHECK: validated via address = epoch_state.treasury
+    #[account(mut, address = epoch_state.treasury @ MasterError::InvalidTreasury)]
     pub treasury: UncheckedAccount<'info>,
 
-    /// Burn address — lamports sent here are effectively destroyed.
-    /// CHECK: intentional sink; any pubkey is valid
-    #[account(mut)]
+    /// Hardcoded burn sink — lamports sent here are permanently removed from circulation.
+    /// CHECK: address constraint enforces the well-known incinerator
+    #[account(mut, address = BURN_ADDRESS)]
     pub burn_address: UncheckedAccount<'info>,
 }
 
@@ -52,20 +50,13 @@ pub fn handler(ctx: Context<CloseEpoch>) -> Result<()> {
         MasterError::EpochNotOver
     );
 
-    require_keys_eq!(
-        ctx.accounts.treasury.key(),
-        state.treasury,
-        MasterError::EpochNotOver
-    );
-
     // ── compute the final master's complete cumulative total ────────────────────
     // current_master_record.total_reign_time holds all their COMPLETED reigns.
     // Add the final ongoing reign measured by the wall-clock timestamp at the
-    // moment close_epoch is called.  This is the best on-chain approximation of
-    // "time on the throne until the X1 epoch boundary."
+    // moment close_epoch is called.
     let final_reign = (clock.unix_timestamp
         .checked_sub(state.master_since)
-        .unwrap_or(0)) as u64;
+        .ok_or(MasterError::Overflow)?) as u64;
 
     let final_master_total = ctx.accounts.current_master_record
         .total_reign_time
@@ -73,9 +64,9 @@ pub fn handler(ctx: Context<CloseEpoch>) -> Result<()> {
         .ok_or(MasterError::Overflow)?;
 
     // ── determine the winner ──────────────────────────────────────────────────
-    // leading_master_time is the best cumulative total seen across all deposed masters.
-    // We compare it against the final master's just-computed total.
-    let winner_key = if final_master_total > state.leading_master_time {
+    // >= so that when both totals are zero the final (current) master wins
+    // rather than falling through to leading_master which may be Pubkey::default().
+    let winner_key = if final_master_total >= state.leading_master_time {
         state.leading_master = state.current_master;
         state.leading_master_time = final_master_total;
         state.current_master
@@ -86,21 +77,20 @@ pub fn handler(ctx: Context<CloseEpoch>) -> Result<()> {
     require_keys_eq!(
         ctx.accounts.winner.key(),
         winner_key,
-        MasterError::EpochNotOver
+        MasterError::InvalidWinner
     );
 
-    // Snapshot values we need after the mutable borrow ends, then close the
-    // borrow explicitly so to_account_info() can be called on epoch_state below.
     let (pot, leading_master_time) = {
         state.closed = true;
         (state.pot, state.leading_master_time)
     };
 
     // ── payout ───────────────────────────────────────────────────────────────
-    let winner_share   = pot.checked_mul(WINNER_BPS).ok_or(MasterError::Overflow)?   / 10_000;
-    let burn_share     = pot.checked_mul(BURN_BPS).ok_or(MasterError::Overflow)?     / 10_000;
-    let treasury_share = pot.checked_mul(TREASURY_BPS).ok_or(MasterError::Overflow)? / 10_000;
-    // Remainder to caller prevents dust from accumulating in the vault.
+    // Use u128 intermediates to prevent overflow when pot is large.
+    let winner_share   = ((pot as u128) * (WINNER_BPS   as u128) / 10_000u128) as u64;
+    let burn_share     = ((pot as u128) * (BURN_BPS     as u128) / 10_000u128) as u64;
+    let treasury_share = ((pot as u128) * (TREASURY_BPS as u128) / 10_000u128) as u64;
+    // Remainder to caller — absorbs any integer-division dust.
     let caller_share = pot
         .checked_sub(winner_share)
         .and_then(|r| r.checked_sub(burn_share))

@@ -22,4 +22,13 @@ pub enum MasterError {
 
     #[msg("Arithmetic overflow")]
     Overflow,
+
+    #[msg("Cannot claim the throne you already hold")]
+    SelfReclaim,
+
+    #[msg("Treasury account does not match the registered treasury")]
+    InvalidTreasury,
+
+    #[msg("Winner account does not match the computed winner")]
+    InvalidWinner,
 }

@@ -6,7 +6,7 @@ use {
     },
     litesvm::LiteSVM,
     litesvm::types::FailedTransactionMetadata,
-    master_of_the_epoch::state::{EpochState, MasterRecord},
+    master_of_the_epoch::{state::{EpochState, MasterRecord}, BURN_ADDRESS},
     solana_keypair::Keypair,
     solana_message::{Message, VersionedMessage},
     solana_signer::Signer,
@@ -368,7 +368,6 @@ fn test_close_epoch_correct_winner() {
     let alice = Keypair::new();
     let bob = Keypair::new();
     let caller = Keypair::new();
-    let burn_addr = Pubkey::new_unique();
     svm.airdrop(&payer.pubkey(), 10 * XNT).unwrap();
     svm.airdrop(&alice.pubkey(), 20 * XNT).unwrap();
     svm.airdrop(&bob.pubkey(), 20 * XNT).unwrap();
@@ -392,7 +391,7 @@ fn test_close_epoch_correct_winner() {
         &caller,
         &alice.pubkey(),
         &treasury.pubkey(),
-        &burn_addr,
+        &BURN_ADDRESS,
         &bob.pubkey(),
     );
 
@@ -408,7 +407,6 @@ fn test_close_epoch_distribution() {
     let treasury = Keypair::new();
     let alice = Keypair::new();
     let caller = Keypair::new();
-    let burn_addr = Keypair::new();
     svm.airdrop(&payer.pubkey(), 10 * XNT).unwrap();
     svm.airdrop(&alice.pubkey(), 20 * XNT).unwrap();
     svm.airdrop(&caller.pubkey(), 2 * XNT).unwrap();
@@ -422,13 +420,13 @@ fn test_close_epoch_distribution() {
     set_clock(&mut svm, 1_000_100, 2);
 
     let pot = 5 * XNT;
-    let winner_share   = pot * 6_000 / 10_000; // 3_000_000_000
-    let burn_share     = pot * 2_500 / 10_000; // 1_250_000_000
-    let treasury_share = pot * 1_000 / 10_000; //   500_000_000
+    let winner_share   = ((pot as u128) * 6_000 / 10_000) as u64; // 3_000_000_000
+    let burn_share     = ((pot as u128) * 2_500 / 10_000) as u64; // 1_250_000_000
+    let treasury_share = ((pot as u128) * 1_000 / 10_000) as u64; //   500_000_000
     let caller_share   = pot - winner_share - burn_share - treasury_share; // remainder
 
     let treasury_before = svm.get_account(&treasury.pubkey()).map(|a| a.lamports).unwrap_or(0);
-    let burn_before     = svm.get_account(&burn_addr.pubkey()).map(|a| a.lamports).unwrap_or(0);
+    let burn_before     = svm.get_account(&BURN_ADDRESS).map(|a| a.lamports).unwrap_or(0);
     let caller_before   = svm.get_account(&caller.pubkey()).unwrap().lamports;
     let alice_before    = svm.get_account(&alice.pubkey()).unwrap().lamports;
 
@@ -438,13 +436,13 @@ fn test_close_epoch_distribution() {
         &caller,
         &alice.pubkey(),
         &treasury.pubkey(),
-        &burn_addr.pubkey(),
+        &BURN_ADDRESS,
         &alice.pubkey(),
     );
 
     let alice_after    = svm.get_account(&alice.pubkey()).unwrap().lamports;
     let treasury_after = svm.get_account(&treasury.pubkey()).unwrap().lamports;
-    let burn_after     = svm.get_account(&burn_addr.pubkey()).map(|a| a.lamports).unwrap_or(0);
+    let burn_after     = svm.get_account(&BURN_ADDRESS).map(|a| a.lamports).unwrap_or(0);
     let caller_after   = svm.get_account(&caller.pubkey()).unwrap().lamports;
 
     assert_eq!(alice_after - alice_before, winner_share,   "winner share wrong");
@@ -469,7 +467,6 @@ fn test_close_epoch_rejects_if_not_over() {
     let treasury = Keypair::new();
     let alice = Keypair::new();
     let caller = Keypair::new();
-    let burn_addr = Pubkey::new_unique();
     svm.airdrop(&payer.pubkey(), 10 * XNT).unwrap();
     svm.airdrop(&alice.pubkey(), 20 * XNT).unwrap();
     svm.airdrop(&caller.pubkey(), 2 * XNT).unwrap();
@@ -486,7 +483,7 @@ fn test_close_epoch_rejects_if_not_over() {
         &caller,
         &alice.pubkey(),
         &treasury.pubkey(),
-        &burn_addr,
+        &BURN_ADDRESS,
         &alice.pubkey(),
     );
     let err_str = format!("{:?}", err);

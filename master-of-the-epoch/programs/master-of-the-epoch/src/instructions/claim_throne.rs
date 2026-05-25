@@ -31,7 +31,10 @@ pub struct ClaimThrone<'info> {
     #[account(mut)]
     pub outgoing_master_record: UncheckedAccount<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = claimant.key() != epoch_state.current_master @ MasterError::SelfReclaim,
+    )]
     pub claimant: Signer<'info>,
 
     pub system_program: Program<'info, System>,

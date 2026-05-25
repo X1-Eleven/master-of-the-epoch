@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{constants::*, state::EpochState, error::MasterError};
+use crate::{constants::*, state::EpochState};
 
 #[derive(Accounts)]
 pub struct InitializeEpoch<'info> {
@@ -23,8 +23,6 @@ pub struct InitializeEpoch<'info> {
 }
 
 pub fn handler(ctx: Context<InitializeEpoch>) -> Result<()> {
-    require!(!ctx.accounts.epoch_state.closed, MasterError::EpochAlreadyClosed);
-
     let state = &mut ctx.accounts.epoch_state;
     state.treasury = ctx.accounts.treasury.key();
     state.current_master = Pubkey::default();

@@ -1,3 +1,5 @@
+use anchor_lang::prelude::Pubkey;
+
 /// Seed for the global epoch PDA
 pub const EPOCH_SEED: &[u8] = b"epoch_state";
 
@@ -21,3 +23,10 @@ pub const WINNER_BPS: u64 = 6_000;   // 60%
 pub const BURN_BPS: u64 = 2_500;     // 25%
 pub const TREASURY_BPS: u64 = 1_000; // 10%
 pub const CALLER_BPS: u64 = 500;     // 5%
+
+/// Well-known Solana/X1 incinerator — lamports sent here are permanently removed
+/// from circulation. bs58: 1nc1nerator11111111111111111111111111111111
+pub const BURN_ADDRESS: Pubkey = Pubkey::new_from_array([
+      0,  51, 144, 114, 141,  52,  17,  96, 121, 189, 201,  17, 191, 255,   0, 219,
+    212,  77,  46, 205, 204, 247, 156, 166, 225,   0,  56, 225,   0,   0,   0,   0,
+]);
