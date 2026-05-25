@@ -52,11 +52,16 @@ pub fn handler(ctx: Context<CloseEpoch>) -> Result<()> {
 
     // ── compute the final master's complete cumulative total ────────────────────
     // current_master_record.total_reign_time holds all their COMPLETED reigns.
-    // Add the final ongoing reign measured by the wall-clock timestamp at the
-    // moment close_epoch is called.
-    let final_reign = (clock.unix_timestamp
+    // Cap the final ongoing reign at clock.epoch_start_timestamp, which is the
+    // start of the current network epoch and approximates when the game epoch
+    // ended.  Without this cap, a caller who delays close_epoch could inflate
+    // the final master's time beyond the actual game window.
+    // .max(state.master_since) guards against clock skew where epoch_start_timestamp
+    // might be slightly before master_since; in that edge case final_reign is 0.
+    let reign_end = clock.epoch_start_timestamp.max(state.master_since);
+    let final_reign = reign_end
         .checked_sub(state.master_since)
-        .ok_or(MasterError::Overflow)?) as u64;
+        .ok_or(MasterError::Overflow)? as u64;
 
     let final_master_total = ctx.accounts.current_master_record
         .total_reign_time
@@ -111,6 +116,16 @@ pub fn handler(ctx: Context<CloseEpoch>) -> Result<()> {
 
     **epoch_info.try_borrow_mut_lamports()? -= caller_share;
     **ctx.accounts.caller.try_borrow_mut_lamports()? += caller_share;
+
+    // Drain the rent-exempt balance to treasury and close the account.
+    // When the account reaches zero lamports the runtime garbage-collects the
+    // PDA at end of transaction, allowing initialize_epoch to re-create it for
+    // the next game (N-L-1 fix / restart mechanism).
+    let remaining = **epoch_info.try_borrow_lamports()?;
+    if remaining > 0 {
+        **epoch_info.try_borrow_mut_lamports()? -= remaining;
+        **ctx.accounts.treasury.try_borrow_mut_lamports()? += remaining;
+    }
 
     msg!(
         "Epoch closed | winner: {} | total time: {}s | pot: {} | \

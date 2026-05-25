@@ -26,6 +26,10 @@ pub struct EpochState {
     pub closed: bool,
     /// Bump seed for the PDA
     pub bump: u8,
+    /// Unique identifier for this game instance (set to unix_timestamp at init).
+    /// MasterRecord entries whose game_id differs from this are stale and are
+    /// reset on a player's first claim in the new game.
+    pub game_id: u64,
 }
 
 impl EpochState {
@@ -39,7 +43,8 @@ impl EpochState {
         + 8   // pot
         + 8   // next_claim_cost
         + 1   // closed
-        + 1;  // bump
+        + 1   // bump
+        + 8;  // game_id
 }
 
 /// Per-wallet record tracking cooldown and cumulative reign time.
@@ -55,6 +60,10 @@ pub struct MasterRecord {
     /// claim_throne (when they're deposed) or close_epoch (if they're last master).
     pub total_reign_time: u64,
     pub bump: u8,
+    /// Mirrors EpochState.game_id at the time of this wallet's last claim.
+    /// If it differs from the current epoch's game_id the record is stale and
+    /// its per-game fields (total_reign_time, last_claim) are reset before use.
+    pub game_id: u64,
 }
 
 impl MasterRecord {
@@ -62,5 +71,6 @@ impl MasterRecord {
         + 32  // owner
         + 8   // last_claim
         + 8   // total_reign_time
-        + 1;  // bump
+        + 1   // bump
+        + 8;  // game_id
 }

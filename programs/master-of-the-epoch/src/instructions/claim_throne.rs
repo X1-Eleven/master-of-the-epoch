@@ -56,7 +56,21 @@ pub fn handler(ctx: Context<ClaimThrone>) -> Result<()> {
         }
     }
 
-    // Cooldown: skip on first-ever claim from this wallet (last_claim == 0)
+    // ── per-game record reset ─────────────────────────────────────────────────
+    // If this claimant_record was written during a previous game, clear its
+    // per-game counters before we apply the current game's cooldown or tally.
+    let current_game_id = ctx.accounts.epoch_state.game_id;
+    {
+        let record = &mut ctx.accounts.claimant_record;
+        if record.game_id != current_game_id {
+            record.total_reign_time = 0;
+            record.last_claim = 0;
+            record.game_id = current_game_id;
+        }
+    }
+
+    // ── cooldown ──────────────────────────────────────────────────────────────
+    // Skip on first-ever claim from this wallet in this game (last_claim == 0).
     {
         let record = &ctx.accounts.claimant_record;
         if record.last_claim != 0 {
@@ -137,11 +151,12 @@ pub fn handler(ctx: Context<ClaimThrone>) -> Result<()> {
         .checked_add(CLAIM_COST_STEP)
         .ok_or(MasterError::Overflow)?;
 
-    // Update the claimant's cooldown (and bump on first init)
+    // Update the claimant's record (and bump on first init)
     let claimant_record = &mut ctx.accounts.claimant_record;
     claimant_record.owner = claimant_key;
     claimant_record.last_claim = now;
     claimant_record.bump = ctx.bumps.claimant_record;
+    claimant_record.game_id = current_game_id;
 
     msg!(
         "New master: {} | cost: {} lamports | game epoch: {}",

@@ -41,6 +41,19 @@ fn set_clock(svm: &mut LiteSVM, unix_timestamp: i64, epoch: u64) {
     svm.expire_blockhash();
 }
 
+// Variant of set_clock with explicit epoch_start_timestamp for tests that
+// need to verify the epoch-boundary cap on the final master's reign time.
+fn set_clock_full(svm: &mut LiteSVM, unix_timestamp: i64, epoch: u64, epoch_start_timestamp: i64) {
+    svm.set_sysvar(&Clock {
+        slot: unix_timestamp as u64,
+        epoch,
+        epoch_start_timestamp,
+        unix_timestamp,
+        leader_schedule_epoch: epoch + 1,
+    });
+    svm.expire_blockhash();
+}
+
 fn read_epoch_state(svm: &LiteSVM) -> EpochState {
     let acc = svm.get_account(&epoch_state_pda()).expect("epoch_state not found");
     EpochState::try_deserialize(&mut acc.data.as_ref()).expect("deserialize EpochState")
@@ -192,6 +205,8 @@ fn test_initialize_epoch_initial_state() {
     assert_eq!(state.pot, 0);
     assert_eq!(state.next_claim_cost, 5 * XNT);
     assert!(!state.closed);
+    // game_id is set to the unix_timestamp at initialization (1_000_000 from setup_svm)
+    assert_eq!(state.game_id, 1_000_000);
 }
 
 #[test]
@@ -395,8 +410,11 @@ fn test_close_epoch_correct_winner() {
         &bob.pubkey(),
     );
 
-    let state = read_epoch_state(&svm);
-    assert!(state.closed);
+    // epoch_state is drained to zero lamports and garbage-collected on close
+    assert!(
+        svm.get_account(&epoch_state_pda()).is_none(),
+        "epoch_state should be drained and gone after close"
+    );
 }
 
 #[test]
@@ -430,6 +448,11 @@ fn test_close_epoch_distribution() {
     let caller_before   = svm.get_account(&caller.pubkey()).unwrap().lamports;
     let alice_before    = svm.get_account(&alice.pubkey()).unwrap().lamports;
 
+    // close_epoch drains rent-exempt lamports to treasury in addition to the 10% share.
+    // Capture epoch_state balance now (rent + pot) to compute how much rent goes to treasury.
+    let epoch_lamports_before_close = svm.get_account(&epoch_state_pda()).unwrap().lamports;
+    let rent_in_epoch = epoch_lamports_before_close - pot;
+
     // alice is both current_master and winner (only participant)
     do_close_epoch(
         &mut svm,
@@ -445,9 +468,17 @@ fn test_close_epoch_distribution() {
     let burn_after     = svm.get_account(&BURN_ADDRESS).map(|a| a.lamports).unwrap_or(0);
     let caller_after   = svm.get_account(&caller.pubkey()).unwrap().lamports;
 
-    assert_eq!(alice_after - alice_before, winner_share,   "winner share wrong");
-    assert_eq!(treasury_after - treasury_before, treasury_share, "treasury share wrong");
-    assert_eq!(burn_after - burn_before, burn_share,       "burn share wrong");
+    // epoch_state is drained and gone
+    assert!(svm.get_account(&epoch_state_pda()).is_none(), "epoch_state should be gone after close");
+
+    assert_eq!(alice_after - alice_before, winner_share, "winner share wrong");
+    // Treasury receives its 10% pot share plus the rent-exempt balance of the closed account.
+    assert_eq!(
+        treasury_after - treasury_before,
+        treasury_share + rent_in_epoch,
+        "treasury share wrong (should include rent recovery)"
+    );
+    assert_eq!(burn_after - burn_before, burn_share, "burn share wrong");
 
     // caller gets caller_share but also pays tx fees — allow a small tolerance
     let caller_delta    = caller_after as i64 - caller_before as i64;
@@ -492,4 +523,122 @@ fn test_close_epoch_rejects_if_not_over() {
         "expected EpochNotOver, got: {}",
         err_str
     );
+}
+
+#[test]
+fn test_close_epoch_caps_reign_at_epoch_boundary() {
+    // Verifies N-H-1 fix: the final master's reign is capped at epoch_start_timestamp
+    // rather than the unix_timestamp when close_epoch is called.
+    //
+    // Scenario: Alice reigns 500s (committed at Bob's claim).  Bob claims at
+    // T=1_000_500 and holds the throne.  The actual epoch boundary lands at
+    // T=1_000_510 (10s after Bob's claim).  close_epoch is called very late
+    // at T=1_002_000.  Without the cap, Bob's apparent reign would be 1500s,
+    // beating Alice's 500s.  With the cap, Bob gets only his 10s and Alice wins.
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    let treasury = Keypair::new();
+    let alice = Keypair::new();
+    let bob = Keypair::new();
+    let caller = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * XNT).unwrap();
+    svm.airdrop(&alice.pubkey(), 50 * XNT).unwrap();
+    svm.airdrop(&bob.pubkey(), 50 * XNT).unwrap();
+    svm.airdrop(&caller.pubkey(), 2 * XNT).unwrap();
+
+    do_initialize(&mut svm, &payer, &treasury.pubkey());
+
+    // Alice claims at T=1_000_000, reigns 500s
+    set_clock(&mut svm, 1_000_000, 1);
+    do_claim_throne_ok(&mut svm, &alice, None);
+
+    // Bob displaces Alice at T=1_000_500 → Alice gets 500s credited
+    set_clock(&mut svm, 1_000_500, 1);
+    do_claim_throne_ok(&mut svm, &bob, Some(&alice.pubkey()));
+
+    // close_epoch is called very late (T=1_002_000) but epoch_start_timestamp=1_000_510
+    // means the game epoch boundary was only 10s after Bob's claim.
+    // Bob's capped reign = 1_000_510 - 1_000_500 = 10s < Alice's 500s → Alice wins.
+    set_clock_full(&mut svm, 1_002_000, 2, 1_000_510);
+
+    // Passing alice as winner must succeed; passing bob would fail with InvalidWinner.
+    do_close_epoch(
+        &mut svm,
+        &caller,
+        &alice.pubkey(),
+        &treasury.pubkey(),
+        &BURN_ADDRESS,
+        &bob.pubkey(),
+    );
+
+    assert!(
+        svm.get_account(&epoch_state_pda()).is_none(),
+        "epoch_state should be drained after close"
+    );
+}
+
+#[test]
+fn test_restart_after_epoch_close() {
+    // Verifies N-I-1 fix: after close_epoch drains and GC's the epoch_state PDA,
+    // initialize_epoch can re-create it for a new game.  Also verifies N-M-1
+    // design: MasterRecord per-game fields (total_reign_time, last_claim) reset
+    // when a player first claims in the new game.
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    let treasury = Keypair::new();
+    let alice = Keypair::new();
+    let bob = Keypair::new();
+    let caller = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 100 * XNT).unwrap();
+    svm.airdrop(&alice.pubkey(), 500 * XNT).unwrap();
+    svm.airdrop(&bob.pubkey(), 500 * XNT).unwrap();
+    svm.airdrop(&caller.pubkey(), 10 * XNT).unwrap();
+
+    // ── GAME 1 ───────────────────────────────────────────────────────────────
+    // game_id = 1_000_000 (unix_timestamp at initialize time, set by setup_svm)
+    do_initialize(&mut svm, &payer, &treasury.pubkey());
+    let game1_id = read_epoch_state(&svm).game_id;
+
+    set_clock(&mut svm, 1_000_000, 1);
+    do_claim_throne_ok(&mut svm, &alice, None); // Alice reigns 300s
+
+    set_clock(&mut svm, 1_000_300, 1);
+    do_claim_throne_ok(&mut svm, &bob, Some(&alice.pubkey())); // Bob holds throne at game end
+
+    // Close game 1: epoch boundary at T=1_000_250 (set_clock offset), Bob's reign = 0s.
+    // Alice wins (300s > 0s).
+    set_clock(&mut svm, 1_000_350, 2);
+    do_close_epoch(&mut svm, &caller, &alice.pubkey(), &treasury.pubkey(), &BURN_ADDRESS, &bob.pubkey());
+
+    // epoch_state PDA must be gone — runtime GC'd it when lamports hit zero
+    assert!(svm.get_account(&epoch_state_pda()).is_none(), "epoch_state must be gone after game 1");
+
+    // ── GAME 2 ───────────────────────────────────────────────────────────────
+    // Use a different unix_timestamp so game_id differs from game 1.
+    set_clock(&mut svm, 1_100_000, 2);
+    do_initialize(&mut svm, &payer, &treasury.pubkey());
+
+    let state2 = read_epoch_state(&svm);
+    assert!(!state2.closed, "game 2 must start open");
+    assert_eq!(state2.pot, 0, "game 2 pot must reset to 0");
+    assert_eq!(state2.next_claim_cost, 5 * XNT, "game 2 claim cost must reset to 5 XNT");
+    assert_eq!(state2.current_master, Pubkey::default());
+    assert_ne!(state2.game_id, game1_id, "game 2 must have a different game_id");
+    assert_eq!(state2.game_id, 1_100_000, "game_id equals unix_timestamp at init");
+
+    // Bob's MasterRecord from game 1 still exists but its game_id differs.
+    // His first claim in game 2 must trigger the reset, zeroing total_reign_time.
+    do_claim_throne_ok(&mut svm, &bob, None);
+    let bob_record = read_master_record(&svm, &bob.pubkey());
+    assert_eq!(bob_record.total_reign_time, 0, "Bob's reign time must reset in game 2");
+    assert_eq!(bob_record.game_id, 1_100_000, "Bob's record must carry game 2 game_id");
+
+    // Game 2 escalates from scratch: Alice's claim costs 10 XNT (second claim overall in game 2)
+    set_clock(&mut svm, 1_100_070, 2);
+    do_claim_throne_ok(&mut svm, &alice, Some(&bob.pubkey()));
+
+    let state2 = read_epoch_state(&svm);
+    assert_eq!(state2.current_master, alice.pubkey());
+    assert_eq!(state2.pot, 15 * XNT, "pot must be 5+10 XNT from two fresh-game claims");
+    assert_eq!(state2.next_claim_cost, 15 * XNT);
 }

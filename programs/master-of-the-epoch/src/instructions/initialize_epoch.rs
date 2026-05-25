@@ -34,6 +34,10 @@ pub fn handler(ctx: Context<InitializeEpoch>) -> Result<()> {
     state.next_claim_cost = INITIAL_CLAIM_COST;
     state.closed = false;
     state.bump = ctx.bumps.epoch_state;
+    // game_id uniquely identifies this game instance.  MasterRecord entries
+    // with a different game_id are treated as belonging to a prior run and
+    // have their per-game fields reset on the player's first claim here.
+    state.game_id = Clock::get()?.unix_timestamp as u64;
 
     Ok(())
 }
