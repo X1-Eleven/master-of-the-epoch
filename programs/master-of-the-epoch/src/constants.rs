@@ -6,6 +6,9 @@ pub const EPOCH_SEED: &[u8] = b"epoch_state";
 /// Seed prefix for per-wallet master record PDAs
 pub const MASTER_RECORD_SEED: &[u8] = b"master_record";
 
+/// Seed for the persistent game-counter PDA
+pub const GAME_COUNTER_SEED: &[u8] = b"game_counter";
+
 /// 1 XNT expressed in lamports (X1 uses 9-decimal lamports like Solana)
 pub const XNT_PER_LAMPORT: u64 = 1_000_000_000;
 
@@ -29,4 +32,14 @@ pub const CALLER_BPS: u64 = 500;     // 5%
 pub const BURN_ADDRESS: Pubkey = Pubkey::new_from_array([
       0,  51, 144, 114, 141,  52,  17,  96, 121, 189, 201,  17, 191, 255,   0, 219,
     212,  77,  46, 205, 204, 247, 156, 166, 225,   0,  56, 225,   0,   0,   0,   0,
+]);
+
+/// Project treasury — receives 10 % of each pot plus the epoch-state rent on close.
+/// Hardcoded to prevent treasury hijacking after epoch close (audit C-1).
+/// IMPORTANT: replace this placeholder with the real treasury wallet before deployment.
+pub const TREASURY_ADDRESS: Pubkey = Pubkey::new_from_array([
+    0xBA, 0xAD, 0xF0, 0x0D, 0xBA, 0xAD, 0xF0, 0x0D,
+    0xBA, 0xAD, 0xF0, 0x0D, 0xBA, 0xAD, 0xF0, 0x0D,
+    0xBA, 0xAD, 0xF0, 0x0D, 0xBA, 0xAD, 0xF0, 0x0D,
+    0xBA, 0xAD, 0xF0, 0x0D, 0xBA, 0xAD, 0xF0, 0x0D,
 ]);

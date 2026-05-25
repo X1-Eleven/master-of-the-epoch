@@ -4,7 +4,7 @@ use anchor_lang::AccountDeserialize;
 use crate::{constants::*, state::{EpochState, MasterRecord}, error::MasterError};
 
 #[derive(Accounts)]
-pub struct ClaimThrone<'info> {
+pub struct ClaimMaster<'info> {
     #[account(
         mut,
         seeds = [EPOCH_SEED],
@@ -40,7 +40,7 @@ pub struct ClaimThrone<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<ClaimThrone>) -> Result<()> {
+pub fn handler(ctx: Context<ClaimMaster>) -> Result<()> {
     let claimant_key = ctx.accounts.claimant.key();
     let now = Clock::get()?.unix_timestamp;
 
@@ -121,23 +121,31 @@ pub fn handler(ctx: Context<ClaimThrone>) -> Result<()> {
             MasterError::InvalidMasterRecord,
         );
 
-        // Deserialize → add reign → serialize back.
+        // Deserialize the outgoing master's record.
         let mut outgoing = {
             let data = ctx.accounts.outgoing_master_record.try_borrow_data()?;
             MasterRecord::try_deserialize(&mut data.as_ref())?
         };
-        outgoing.total_reign_time = outgoing.total_reign_time
-            .checked_add(reign_duration)
-            .ok_or(MasterError::Overflow)?;
-        {
-            let mut data = ctx.accounts.outgoing_master_record.try_borrow_mut_data()?;
-            outgoing.try_serialize(&mut data.as_mut())?;
-        }
 
-        // Update the epoch-level leaderboard with the outgoing master's new cumulative total.
-        if outgoing.total_reign_time > state.leading_master_time {
-            state.leading_master = state.current_master;
-            state.leading_master_time = outgoing.total_reign_time;
+        // Defence-in-depth (audit L-1): only credit reign time when the outgoing
+        // record belongs to the current game.  Under normal operation the outgoing
+        // master always set their record's game_id via claim_master in this game,
+        // so the ids always match.  A mismatch would indicate a stale record and
+        // crediting it would pollute the new game's leaderboard.
+        if outgoing.game_id == current_game_id {
+            outgoing.total_reign_time = outgoing.total_reign_time
+                .checked_add(reign_duration)
+                .ok_or(MasterError::Overflow)?;
+            {
+                let mut data = ctx.accounts.outgoing_master_record.try_borrow_mut_data()?;
+                outgoing.try_serialize(&mut data.as_mut())?;
+            }
+
+            // Update the epoch-level leaderboard with the outgoing master's new cumulative total.
+            if outgoing.total_reign_time > state.leading_master_time {
+                state.leading_master = state.current_master;
+                state.leading_master_time = outgoing.total_reign_time;
+            }
         }
     }
 

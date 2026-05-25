@@ -20,9 +20,9 @@ pub mod master_of_the_epoch {
         instructions::initialize_epoch::handler(ctx)
     }
 
-    /// Pay XNT to seize the throne. Starts the 22-hour epoch on first call.
-    pub fn claim_throne(ctx: Context<ClaimThrone>) -> Result<()> {
-        instructions::claim_throne::handler(ctx)
+    /// Pay XNT to seize the master position. Starts the 22-hour epoch on first call.
+    pub fn claim_master(ctx: Context<ClaimMaster>) -> Result<()> {
+        instructions::claim_master::handler(ctx)
     }
 
     /// Anyone may call after epoch_end to distribute the pot to winner/burn/treasury/caller.

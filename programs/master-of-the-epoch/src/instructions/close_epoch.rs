@@ -121,6 +121,12 @@ pub fn handler(ctx: Context<CloseEpoch>) -> Result<()> {
     // When the account reaches zero lamports the runtime garbage-collects the
     // PDA at end of transaction, allowing initialize_epoch to re-create it for
     // the next game (N-L-1 fix / restart mechanism).
+    //
+    // Design note (audit L-2): lamports transferred directly to epoch_state
+    // outside of claim_master (e.g. a user mis-sending XNT to the PDA) bypass
+    // state.pot accounting and appear here as residual above the pot amount.
+    // This is accepted by design — the tracked pot is always correct; the
+    // surplus flows to treasury rather than being lost or disrupting payouts.
     let remaining = **epoch_info.try_borrow_lamports()?;
     if remaining > 0 {
         **epoch_info.try_borrow_mut_lamports()? -= remaining;

@@ -23,7 +23,7 @@ pub enum MasterError {
     #[msg("Arithmetic overflow")]
     Overflow,
 
-    #[msg("Cannot claim the throne you already hold")]
+    #[msg("Cannot claim the master position you already hold")]
     SelfReclaim,
 
     #[msg("Treasury account does not match the registered treasury")]
