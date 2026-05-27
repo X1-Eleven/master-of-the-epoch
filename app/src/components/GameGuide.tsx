@@ -4,7 +4,7 @@ import { BASE_CLAIM_COST_XNT } from '../constants';
 const MECHANICS = [
   {
     icon: '⚔',
-    title: 'Claim the Throne',
+    title: 'Claim the Master',
     body: `Pay ${BASE_CLAIM_COST_XNT} XNT to become Master. Each new takeover raises the cost by 5 XNT.`,
   },
   {
@@ -15,7 +15,7 @@ const MECHANICS = [
   {
     icon: '📈',
     title: 'Escalating Cost',
-    body: 'Claim 1: 5 XNT · Claim 2: 10 XNT · Claim 3: 15 XNT … Spam becomes expensive fast.',
+    body: 'Claim 1: 5 XNT · Claim 2: 10 XNT · Claim 3: 15 XNT … 60s cooldown between claims per wallet.',
   },
   {
     icon: '⏰',
@@ -25,7 +25,7 @@ const MECHANICS = [
   {
     icon: '💰',
     title: 'Close & Earn',
-    body: 'Anyone can call close_epoch after the epoch ends and pocket 5% of the pot instantly.',
+    body: 'Anyone can close the epoch after it ends and pocket 5% of the pot instantly.',
   },
   {
     icon: '🔥',
@@ -38,6 +38,10 @@ const FAQ: { q: string; a: string }[] = [
   {
     q: 'What happens if nobody claims Master during an epoch?',
     a: "Nothing bad — the game simply doesn't start. No pot accumulates, no winner is declared, and the next epoch begins fresh.",
+  },
+  {
+    q: "What happens if nobody closes the epoch?",
+    a: "The epoch remains open until someone calls close and claims the 5% reward. The pot is safe in the contract — no funds are lost. Anyone can close it at any time after the X1 network epoch has ended.",
   },
   {
     q: 'Can the same wallet claim multiple times?',
@@ -58,10 +62,6 @@ const FAQ: { q: string; a: string }[] = [
   {
     q: 'Can the rules ever be changed?',
     a: 'No. The contract is immutable once deployed. There is no admin key, no upgrade authority, and no backdoor. The code is law.',
-  },
-  {
-    q: 'Is there a cooldown between claims?',
-    a: 'Yes. Your wallet must wait 60 seconds after your last successful claim before you can claim again.',
   },
   {
     q: 'What stops someone from spamming claims?',
@@ -97,7 +97,7 @@ export function GameGuide() {
         className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-bg-card-hover transition-colors group"
       >
         <div className="flex items-center gap-2.5">
-          <span className="font-orbitron text-[10px] tracking-[0.3em] text-purple-light/70 uppercase group-hover:text-purple-light transition-colors">
+          <span className="font-orbitron text-xs tracking-[0.2em] text-purple-light/70 uppercase group-hover:text-purple-light transition-colors">
             Game Guide & FAQ
           </span>
         </div>

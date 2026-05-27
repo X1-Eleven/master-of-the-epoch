@@ -50,9 +50,10 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
       {/* Column headers */}
       <div className="px-6 py-2 grid grid-cols-12 gap-2 border-b border-border-dim/40">
         <span className="col-span-1 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Rank</span>
-        <span className="col-span-5 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Wallet</span>
+        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Name</span>
+        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Wallet</span>
         <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Reign Time</span>
-        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Share</span>
+        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Share</span>
       </div>
 
       {/* Rows */}
@@ -86,21 +87,25 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
                   {RANK_LABELS[idx] ?? `#${idx + 1}`}
                 </span>
 
-                {/* Wallet / Nickname */}
-                <div className="col-span-5 flex items-center gap-2 min-w-0">
-                  <div className="min-w-0">
-                    {!isAnon && (
-                      <p className="font-orbitron text-[9px] tracking-wider text-purple-light/80 truncate leading-tight">
-                        {nickname}
-                      </p>
-                    )}
-                    <span className="font-mono text-xs text-slate-400 tracking-wider">
-                      {formatAddress(entry.wallet, 4)}
+                {/* Name */}
+                <div className="col-span-3 min-w-0">
+                  {isAnon ? (
+                    <span className="font-mono text-[10px] text-text-dim/50 truncate">Anonymous</span>
+                  ) : (
+                    <span className="font-orbitron text-[9px] tracking-wider text-purple-light/80 truncate block leading-tight">
+                      {nickname}
                     </span>
-                  </div>
+                  )}
+                </div>
+
+                {/* Wallet */}
+                <div className="col-span-3 flex items-center gap-1.5 min-w-0">
+                  <span className="font-mono text-xs text-slate-400 tracking-wider truncate">
+                    {formatAddress(entry.wallet, 4)}
+                  </span>
                   {entry.isCurrent && (
                     <span
-                      className="text-[9px] font-orbitron px-1.5 py-0.5 rounded border tracking-wider"
+                      className="text-[9px] font-orbitron px-1.5 py-0.5 rounded border tracking-wider shrink-0"
                       style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
                     >
                       MASTER
@@ -117,7 +122,7 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
                 </span>
 
                 {/* Share */}
-                <div className="col-span-3 text-right">
+                <div className="col-span-2 text-right">
                   <span className="font-mono text-xs text-text-dim">
                     {percent.toFixed(1)}%
                   </span>

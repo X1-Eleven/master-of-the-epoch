@@ -27,9 +27,16 @@ export function Header({ onEditNickname }: HeaderProps) {
             <div className="absolute inset-0 rounded-full border-2 border-purple-glow animate-ping opacity-20" />
           </div>
           <div>
-            <h1 className="font-orbitron font-bold text-sm sm:text-base tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-light to-purple-glow">
-              MASTER OF THE EPOCH
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-orbitron font-bold text-sm sm:text-base tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-light to-purple-glow">
+                MASTER OF THE EPOCH
+              </h1>
+              {/* X1 network badge */}
+              <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-neon-dim/40 bg-neon/5 shrink-0">
+                <span className="font-orbitron font-bold text-[10px] tracking-wide text-neon">X</span>
+                <span className="font-orbitron font-bold text-[10px] tracking-wide text-neon-dim">1</span>
+              </div>
+            </div>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse inline-block" />
               <span className="text-neon-dim text-[10px] font-mono tracking-wider">X1 TESTNET</span>

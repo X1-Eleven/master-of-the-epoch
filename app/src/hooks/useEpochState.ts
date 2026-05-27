@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { Program, AnchorProvider, Idl, BN } from '@coral-xyz/anchor';
+import { BorshAccountsCoder, BN } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import {
   PROGRAM_ID,
@@ -68,59 +68,103 @@ const MOCK_EPOCH_INFO: EpochInfo = {
   currentEpoch: 42,
 };
 
+// Stable coder instance (IDL is static)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CODER = new BorshAccountsCoder(IDL as unknown as any);
+
+function decodeEpochState(data: Buffer): EpochStateData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = CODER.decode<any>('epochState', data);
+  return {
+    currentMaster: (raw.currentMaster as PublicKey).toString(),
+    masterSince: (raw.masterSince as BN).toNumber(),
+    leadingMaster: (raw.leadingMaster as PublicKey).toString(),
+    leadingMasterTime: (raw.leadingMasterTime as BN).toNumber(),
+    gameEpoch: (raw.gameEpoch as BN).toNumber(),
+    pot: (raw.pot as BN).toNumber(),
+    nextClaimCost: (raw.nextClaimCost as BN).toNumber(),
+    closed: raw.closed as boolean,
+    treasury: (raw.treasury as PublicKey).toString(),
+    gameId: (raw.gameId as BN).toNumber(),
+  };
+}
+
 export function useEpochState(): UseEpochStateReturn {
   const [epochState, setEpochState] = useState<EpochStateData | null>(null);
   const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const connectionRef = useRef<Connection | null>(null);
+  // Track whether we have already loaded mock data (avoid flicker on retries)
+  const usingMockRef = useRef(false);
 
+  // fetchState is stable (no state deps) — the interval never resets
   const fetchState = useCallback(async () => {
+    if (!connectionRef.current) {
+      connectionRef.current = new Connection(RPC_ENDPOINT, 'confirmed');
+    }
+    const connection = connectionRef.current;
+
+    // Phase 1: network reachability check via getEpochInfo
+    let netEpochInfo: Awaited<ReturnType<Connection['getEpochInfo']>>;
     try {
-      if (!connectionRef.current) {
-        connectionRef.current = new Connection(RPC_ENDPOINT, 'confirmed');
+      netEpochInfo = await connection.getEpochInfo();
+    } catch (networkErr) {
+      console.error('[MOTE] RPC unreachable:', networkErr);
+      if (!usingMockRef.current) {
+        setEpochState(MOCK_STATE);
+        setEpochInfo(MOCK_EPOCH_INFO);
+        usingMockRef.current = true;
       }
-      const connection = connectionRef.current;
+      setError('Using mock data — RPC unavailable');
+      setIsLoading(false);
+      return;
+    }
 
-      const [epochStatePDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from(EPOCH_STATE_SEED)],
-        PROGRAM_ID
-      );
+    // Phase 2: fetch the epoch_state PDA account
+    const [epochStatePDA] = PublicKey.findProgramAddressSync(
+      [Buffer.from(EPOCH_STATE_SEED)],
+      PROGRAM_ID
+    );
 
-      // Use a read-only provider (no wallet needed for reads)
-      const provider = new AnchorProvider(
-        connection,
-        { publicKey: PublicKey.default } as never,
-        { commitment: 'confirmed' }
-      );
-      const program = new Program(IDL as unknown as Idl, provider);
+    let accountInfo: Awaited<ReturnType<Connection['getAccountInfo']>>;
+    try {
+      accountInfo = await connection.getAccountInfo(epochStatePDA);
+    } catch (fetchErr) {
+      console.error('[MOTE] getAccountInfo failed:', fetchErr);
+      const msg = fetchErr instanceof Error ? fetchErr.message.slice(0, 80) : String(fetchErr);
+      setError(`RPC error: ${msg}`);
+      setIsLoading(false);
+      return;
+    }
 
-      const [stateRaw, netEpochInfo] = await Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (program.account as any).epochState.fetch(epochStatePDA),
-        connection.getEpochInfo(),
-      ]);
+    if (!accountInfo) {
+      // RPC is up but the account doesn't exist — initialize_epoch not yet called
+      console.info('[MOTE] epoch_state PDA not found at', epochStatePDA.toString(), '— game not initialized');
+      usingMockRef.current = false;
+      setEpochState(null);
+      setEpochInfo({
+        secondsRemaining: null,
+        isOver: false,
+        slotIndex: netEpochInfo.slotIndex,
+        slotsInEpoch: netEpochInfo.slotsInEpoch,
+        currentEpoch: netEpochInfo.epoch,
+      });
+      setError('Game not yet initialized — call initialize_epoch to start the first epoch');
+      setIsLoading(false);
+      return;
+    }
 
-      const state: EpochStateData = {
-        currentMaster: (stateRaw.currentMaster as PublicKey).toString(),
-        masterSince: (stateRaw.masterSince as BN).toNumber(),
-        leadingMaster: (stateRaw.leadingMaster as PublicKey).toString(),
-        leadingMasterTime: (stateRaw.leadingMasterTime as BN).toNumber(),
-        gameEpoch: (stateRaw.gameEpoch as BN).toNumber(),
-        pot: (stateRaw.pot as BN).toNumber(),
-        nextClaimCost: (stateRaw.nextClaimCost as BN).toNumber(),
-        closed: stateRaw.closed as boolean,
-        treasury: (stateRaw.treasury as PublicKey).toString(),
-        gameId: (stateRaw.gameId as BN).toNumber(),
-      };
-
+    // Phase 3: decode and apply
+    try {
+      const state = decodeEpochState(accountInfo.data as Buffer);
       const currentNetworkEpoch = netEpochInfo.epoch;
-      const isOver =
-        state.gameEpoch > 0 && currentNetworkEpoch > state.gameEpoch;
-
+      const isOver = state.gameEpoch > 0 && currentNetworkEpoch > state.gameEpoch;
       const slotsRemaining = netEpochInfo.slotsInEpoch - netEpochInfo.slotIndex;
       const secondsRemaining = Math.round((slotsRemaining * AVG_SLOT_MS) / 1000);
 
+      usingMockRef.current = false;
       setEpochState(state);
       setEpochInfo({
         secondsRemaining: isOver ? 0 : secondsRemaining,
@@ -130,17 +174,14 @@ export function useEpochState(): UseEpochStateReturn {
         currentEpoch: currentNetworkEpoch,
       });
       setError(null);
-    } catch (e) {
-      // Fall back to mock data so the UI always renders
-      if (!epochState) {
-        setEpochState(MOCK_STATE);
-        setEpochInfo(MOCK_EPOCH_INFO);
-      }
-      setError('Using mock data — RPC unavailable');
-    } finally {
-      setIsLoading(false);
+    } catch (decodeErr) {
+      console.error('[MOTE] account decode error:', decodeErr);
+      const msg = decodeErr instanceof Error ? decodeErr.message.slice(0, 80) : String(decodeErr);
+      setError(`Decode error: ${msg}`);
     }
-  }, [epochState]);
+
+    setIsLoading(false);
+  }, []); // stable — no state deps, uses refs
 
   useEffect(() => {
     fetchState();
@@ -167,11 +208,17 @@ export function getMockLeaderboard(state: EpochStateData): LeaderboardEntry[] {
 
   return [
     { wallet: state.currentMaster, reignTime: currentOngoing, isCurrent: true },
-    { wallet: state.leadingMaster !== state.currentMaster ? state.leadingMaster : '3mRtXQ7bPzNvKs4Y8dLhWc9eJfMnBrGiToAp1x6yUqE', reignTime: state.leadingMasterTime, isCurrent: false },
+    {
+      wallet: state.leadingMaster !== state.currentMaster
+        ? state.leadingMaster
+        : '3mRtXQ7bPzNvKs4Y8dLhWc9eJfMnBrGiToAp1x6yUqE',
+      reignTime: state.leadingMasterTime,
+      isCurrent: false,
+    },
     { wallet: '9pLztK2vRcQj7mXs5YeHnDwFaBiGkNuTy3oP8sL1bCx', reignTime: 2730, isCurrent: false },
     { wallet: 'Bj2nL5xWqKm8RsDfPtCvYz4eHoNaUiGj7yTrFpXcB3A', reignTime: 1200, isCurrent: false },
     { wallet: 'Fq8sTv2pYmXjKcNwA5dReLhBgZoWiUn9s3PkFtEy1C7', reignTime: 540, isCurrent: false },
-  ].sort((a, b) => b.reignTime - a.reignTime).map((e, i) => ({ ...e, rank: i + 1 })) as LeaderboardEntry[];
+  ].sort((a, b) => b.reignTime - a.reignTime) as LeaderboardEntry[];
 }
 
 export function computeClaimCost(nextClaimCostLamports: number): number {

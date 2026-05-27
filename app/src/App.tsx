@@ -17,6 +17,7 @@ import { LiveStatsBar } from './components/LiveStatsBar';
 import { Leaderboard } from './components/Leaderboard';
 import { GameGuide } from './components/GameGuide';
 import { NicknameModal } from './components/NicknameModal';
+import { HallOfMasters } from './components/HallOfMasters';
 import { Footer } from './components/Footer';
 
 // Cast providers to resolve @types/react version mismatches with wallet adapter
@@ -79,13 +80,25 @@ function AppContent() {
       <Header onEditNickname={openNicknameEdit} />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 pb-16 pt-6 space-y-6">
-        {/* RPC status */}
-        {error && (
-          <div className="flex items-center gap-2 text-xs font-mono text-yellow-500/70 bg-yellow-500/5 border border-yellow-500/20 rounded px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500/60 animate-pulse inline-block" />
-            {error}
-          </div>
-        )}
+        {/* Status banner — three distinct flavours */}
+        {error && (() => {
+          const isNotInit = error.startsWith('Game not yet initialized');
+          const isMock    = error.startsWith('Using mock data');
+          return (
+            <div className={`flex items-center gap-2 text-xs font-mono rounded px-3 py-1.5 border ${
+              isNotInit
+                ? 'text-purple-light/70 bg-purple-glow/5 border-purple-glow/20'
+                : isMock
+                ? 'text-yellow-500/70 bg-yellow-500/5 border-yellow-500/20'
+                : 'text-red-400/70 bg-red-500/5 border-red-500/20'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                isNotInit ? 'bg-purple-light/60' : isMock ? 'bg-yellow-500/60 animate-pulse' : 'bg-red-400/60'
+              }`} />
+              {error}
+            </div>
+          );
+        })()}
 
         {/* Collapsible game guide — collapsed by default */}
         <GameGuide />
@@ -107,6 +120,8 @@ function AppContent() {
         />
 
         <Leaderboard entries={leaderboard} isLoading={isLoading} />
+
+        <HallOfMasters />
       </main>
 
       <Footer />
