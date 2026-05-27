@@ -46,6 +46,16 @@ export const IDL = {
   ],
   types: [
     {
+      name: 'gameCounter',
+      type: {
+        kind: 'struct',
+        fields: [
+          { name: 'count', type: 'u64' },
+          { name: 'bump', type: 'u8' },
+        ],
+      },
+    },
+    {
       name: 'epochState',
       type: {
         kind: 'struct',
