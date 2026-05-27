@@ -9,7 +9,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("HLB1ZRJCnJ3XThkKx9SD6VcDVEVq8EGGqWdGWFFDAE1w");
+declare_id!("BC4y2dVdicttQCFSrBA9DjGxuHQrn3dikzds7twaRXu1");
 
 #[program]
 pub mod master_of_the_epoch {

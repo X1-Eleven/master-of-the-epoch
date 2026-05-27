@@ -14,7 +14,7 @@ master_of_the_epoch = "A7WpMwyorUkmTW9tvJLH48Xa4oiZ1ynvNqtWtdxtKChr"
 [provider]
 # X1 mainnet RPC — swap for localnet/devnet during testing
 cluster = "https://xolana.xen.network"
-wallet = "~/.config/solana/id.json"
+wallet = "/home/admin/.config/solana/id.json"
 
 [scripts]
 test = "cargo test"
