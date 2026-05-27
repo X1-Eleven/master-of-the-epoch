@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-master_of_the_epoch = "A7WpMwyorUkmTW9tvJLH48Xa4oiZ1ynvNqtWtdxtKChr"
+master_of_the_epoch = "BC4y2dVdicttQCFSrBA9DjGxuHQrn3dikzds7twaRXu1"
 
 [programs.mainnet]
-master_of_the_epoch = "A7WpMwyorUkmTW9tvJLH48Xa4oiZ1ynvNqtWtdxtKChr"
+master_of_the_epoch = "BC4y2dVdicttQCFSrBA9DjGxuHQrn3dikzds7twaRXu1"
 
 [provider]
 # X1 mainnet RPC — swap for localnet/devnet during testing
