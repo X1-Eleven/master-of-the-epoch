@@ -1,5 +1,5 @@
 import { formatAddress } from '../utils/format';
-import { PROGRAM_ID, EXPLORER_URL, GITHUB_URL } from '../constants';
+import { PROGRAM_ID, GITHUB_URL } from '../constants';
 
 export function Footer() {
   const programId = PROGRAM_ID.toString();
@@ -12,7 +12,7 @@ export function Footer() {
           <div className="flex items-center gap-2">
             <span className="text-text-dim/50">PROGRAM</span>
             <a
-              href={`${EXPLORER_URL}/account/${programId}`}
+              href={`https://explorer.testnet.x1.xyz/account/${programId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-purple-light/70 hover:text-purple-light transition-colors tracking-wider"

@@ -1,5 +1,6 @@
 import { LeaderboardEntry } from '../hooks/useEpochState';
 import { formatAddress, formatReignTime } from '../utils/format';
+import { useNicknames } from '../context/NicknameContext';
 
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
@@ -25,6 +26,7 @@ function ReignBar({ percent }: { percent: number }) {
 }
 
 export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
+  const { getNickname } = useNicknames();
   const totalTime = entries.reduce((sum, e) => sum + e.reignTime, 0) || 1;
 
   return (
@@ -69,6 +71,8 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
           entries.map((entry, idx) => {
             const percent = (entry.reignTime / totalTime) * 100;
             const rankColor = RANK_COLORS[idx] ?? '#7c3aed';
+            const nickname = getNickname(entry.wallet);
+            const isAnon = nickname === 'Anonymous';
             return (
               <div
                 key={entry.wallet}
@@ -82,11 +86,18 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
                   {RANK_LABELS[idx] ?? `#${idx + 1}`}
                 </span>
 
-                {/* Wallet */}
-                <div className="col-span-5 flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-300 tracking-wider">
-                    {formatAddress(entry.wallet, 5)}
-                  </span>
+                {/* Wallet / Nickname */}
+                <div className="col-span-5 flex items-center gap-2 min-w-0">
+                  <div className="min-w-0">
+                    {!isAnon && (
+                      <p className="font-orbitron text-[9px] tracking-wider text-purple-light/80 truncate leading-tight">
+                        {nickname}
+                      </p>
+                    )}
+                    <span className="font-mono text-xs text-slate-400 tracking-wider">
+                      {formatAddress(entry.wallet, 4)}
+                    </span>
+                  </div>
                   {entry.isCurrent && (
                     <span
                       className="text-[9px] font-orbitron px-1.5 py-0.5 rounded border tracking-wider"

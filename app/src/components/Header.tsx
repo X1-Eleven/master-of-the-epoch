@@ -1,10 +1,19 @@
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { formatAddress } from '../utils/format';
+import { useNicknames } from '../context/NicknameContext';
 
-export function Header() {
+interface HeaderProps {
+  onEditNickname: () => void;
+}
+
+export function Header({ onEditNickname }: HeaderProps) {
   const { connected, publicKey, disconnect, connecting } = useWallet();
   const { setVisible } = useWalletModal();
+  const { getNickname } = useNicknames();
+
+  const nickname = connected && publicKey ? getNickname(publicKey.toString()) : null;
+  const isAnon = nickname === 'Anonymous';
 
   return (
     <header className="sticky top-0 z-50 border-b border-border-dim bg-bg-primary/90 backdrop-blur-sm">
@@ -28,18 +37,38 @@ export function Header() {
           </div>
         </div>
 
-        {/* Wallet button */}
+        {/* Wallet area */}
         {connected && publicKey ? (
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded border border-purple-glow/30 bg-purple-glow/5">
-              <span className="w-1.5 h-1.5 rounded-full bg-neon inline-block" />
-              <span className="font-mono text-xs text-purple-light">
-                {formatAddress(publicKey.toString(), 4)}
-              </span>
+          <div className="flex items-center gap-2">
+            {/* Identity chip */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-purple-glow/30 bg-purple-glow/5 max-w-[200px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-neon shrink-0 inline-block" />
+              <div className="overflow-hidden">
+                {!isAnon && (
+                  <p className="font-orbitron text-[9px] text-purple-light tracking-wider truncate leading-tight">
+                    {nickname}
+                  </p>
+                )}
+                <p className="font-mono text-[9px] text-text-dim truncate leading-tight">
+                  {formatAddress(publicKey.toString(), 4)}
+                </p>
+              </div>
+              {/* Edit pencil */}
+              <button
+                onClick={onEditNickname}
+                title="Edit nickname"
+                className="shrink-0 p-0.5 rounded text-text-dim/50 hover:text-purple-light transition-colors"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
             </div>
+
             <button
               onClick={disconnect}
-              className="font-orbitron text-xs tracking-wider uppercase px-4 py-2 rounded border border-red-500/40 text-red-400/70 hover:border-red-500/70 hover:text-red-400 hover:bg-red-500/5 transition-all"
+              className="font-orbitron text-[10px] tracking-wider uppercase px-3 py-1.5 rounded border border-red-500/40 text-red-400/70 hover:border-red-500/70 hover:text-red-400 hover:bg-red-500/5 transition-all"
             >
               Disconnect
             </button>
@@ -48,7 +77,7 @@ export function Header() {
           <button
             onClick={() => setVisible(true)}
             disabled={connecting}
-            className="relative font-orbitron text-xs tracking-wider uppercase px-5 py-2.5 rounded border border-purple-glow bg-purple-mid/20 text-purple-light hover:bg-purple-mid/40 hover:shadow-purple-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="font-orbitron text-xs tracking-wider uppercase px-5 py-2.5 rounded border border-purple-glow bg-purple-mid/20 text-purple-light hover:bg-purple-mid/40 hover:shadow-purple-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {connecting ? (
               <span className="flex items-center gap-2">

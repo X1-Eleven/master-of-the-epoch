@@ -6,6 +6,8 @@ import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData, EpochInfo } from '../hooks/useEpochState';
 import { formatAddress, formatDuration, formatXnt } from '../utils/format';
+import { useNicknames } from '../context/NicknameContext';
+import { CloseEpochButton } from './CloseEpochButton';
 import { PROGRAM_ID, RPC_ENDPOINT, EPOCH_STATE_SEED, MASTER_RECORD_SEED, NULL_PUBLIC_KEY } from '../constants';
 
 interface HeroSectionProps {
@@ -14,16 +16,39 @@ interface HeroSectionProps {
   isLoading: boolean;
   claimCost: number;
   isEpochOver: boolean;
+  isClosed: boolean;
 }
 
-export function HeroSection({ epochState, epochInfo, isLoading, claimCost, isEpochOver }: HeroSectionProps) {
+function ShareButton({ epochNumber, masterDisplay }: { epochNumber: number; masterDisplay: string }) {
+  const tweet = `I'm the current Master of Epoch #${epochNumber} on @X1_Blockchain!\nx1mote.xyz\n#MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
+  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Share as ${masterDisplay}`}
+      className="inline-flex items-center justify-center w-7 h-7 rounded border border-slate-600/40 bg-slate-800/30 text-slate-400 hover:border-slate-400/60 hover:text-slate-200 hover:bg-slate-700/40 transition-all"
+    >
+      {/* X / Twitter logo */}
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.261 5.633 5.903-5.633zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
+      </svg>
+    </a>
+  );
+}
+
+export function HeroSection({
+  epochState, epochInfo, isLoading, claimCost, isEpochOver, isClosed,
+}: HeroSectionProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
+  const { getNickname } = useNicknames();
   const [countdown, setCountdown] = useState<number>(epochInfo?.secondsRemaining ?? 0);
   const [claiming, setClaiming] = useState(false);
   const [txStatus, setTxStatus] = useState<string | null>(null);
 
-  // Live countdown ticker
   useEffect(() => {
     if (epochInfo?.secondsRemaining == null) return;
     setCountdown(epochInfo.secondsRemaining);
@@ -38,11 +63,15 @@ export function HeroSection({ epochState, epochInfo, isLoading, claimCost, isEpo
     ? Math.max(0, Math.floor(Date.now() / 1000) - epochState.masterSince)
     : 0;
 
+  const masterNickname = epochState && !hasNoMaster
+    ? getNickname(epochState.currentMaster)
+    : null;
+  const masterDisplay = masterNickname && masterNickname !== 'Anonymous'
+    ? masterNickname
+    : (epochState ? formatAddress(epochState.currentMaster, 6) : '—');
+
   async function handleClaim() {
-    if (!connected || !publicKey || !signTransaction || !epochState) {
-      setVisible(true);
-      return;
-    }
+    if (!connected || !publicKey || !signTransaction || !epochState) { setVisible(true); return; }
     setClaiming(true);
     setTxStatus(null);
     try {
@@ -54,15 +83,11 @@ export function HeroSection({ epochState, epochInfo, isLoading, claimCost, isEpo
       );
       const program = new Program(IDL as unknown as Idl, provider);
 
-      const [epochStatePDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from(EPOCH_STATE_SEED)],
-        PROGRAM_ID
-      );
+      const [epochStatePDA] = PublicKey.findProgramAddressSync([Buffer.from(EPOCH_STATE_SEED)], PROGRAM_ID);
       const [claimantRecordPDA] = PublicKey.findProgramAddressSync(
         [Buffer.from(MASTER_RECORD_SEED), publicKey.toBuffer()],
         PROGRAM_ID
       );
-
       const noMaster = epochState.currentMaster === NULL_PUBLIC_KEY;
       const outgoingMasterRecord = noMaster
         ? claimantRecordPDA
@@ -106,11 +131,10 @@ export function HeroSection({ epochState, epochInfo, isLoading, claimCost, isEpo
 
   return (
     <section className="relative overflow-hidden rounded-lg border border-border-bright/40 bg-bg-card shadow-purple-sm">
-      {/* Top accent bar */}
       <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-purple-glow to-transparent" />
 
       <div className="scanlines relative p-6 sm:p-8">
-        {/* Section label */}
+        {/* Epoch label */}
         <div className="flex items-center gap-2 mb-6">
           <div className="h-px flex-1 bg-gradient-to-r from-purple-glow/50 to-transparent" />
           <span className="font-orbitron text-[10px] tracking-[0.3em] text-purple-light/60 uppercase">
@@ -134,17 +158,30 @@ export function HeroSection({ epochState, epochInfo, isLoading, claimCost, isEpo
                 — NONE —
               </p>
               <p className="text-xs text-text-dim font-mono mt-1">
-                {gameNotStarted ? 'Game has not started' : 'No master yet'}
+                {gameNotStarted ? 'Game has not started' : 'No master yet this epoch'}
               </p>
             </div>
           ) : (
             <div className="mt-2">
-              <p
-                className="font-mono text-2xl sm:text-3xl font-bold tracking-wider animate-flicker"
-                style={{ color: '#fbbf24', textShadow: '0 0 20px rgba(251, 191, 36, 0.5)' }}
-              >
-                {formatAddress(epochState!.currentMaster, 6)}
-              </p>
+              {/* Nickname (if set) */}
+              {masterNickname && masterNickname !== 'Anonymous' && (
+                <p className="font-orbitron text-lg sm:text-xl font-bold tracking-widest mb-0.5"
+                   style={{ color: '#fbbf24', textShadow: '0 0 20px rgba(251,191,36,0.5)' }}>
+                  {masterNickname}
+                </p>
+              )}
+              {/* Address row + share button */}
+              <div className="flex items-center justify-center gap-2">
+                <p className="font-mono text-base sm:text-xl font-bold tracking-wider animate-flicker"
+                   style={{ color: masterNickname !== 'Anonymous' ? 'rgba(251,191,36,0.65)' : '#fbbf24',
+                            textShadow: '0 0 15px rgba(251,191,36,0.35)' }}>
+                  {formatAddress(epochState!.currentMaster, 6)}
+                </p>
+                <ShareButton
+                  epochNumber={epochState!.gameEpoch}
+                  masterDisplay={masterDisplay}
+                />
+              </div>
               <p className="text-xs text-gold-mid/50 font-mono mt-1">
                 Reigning for {formatDuration(reignSeconds)}
               </p>
@@ -154,86 +191,83 @@ export function HeroSection({ epochState, epochInfo, isLoading, claimCost, isEpo
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-4 mb-8">
-          {/* Countdown */}
           <div className="rounded border border-border-dim bg-bg-primary/50 p-4 text-center">
             <p className="font-orbitron text-[9px] tracking-[0.25em] text-text-dim uppercase mb-2">
               Time Remaining
             </p>
             {isEpochOver ? (
-              <p className="font-orbitron text-lg font-bold text-red-400 tracking-widest">
-                EPOCH OVER
-              </p>
+              <p className="font-orbitron text-lg font-bold text-red-400 tracking-widest">EPOCH OVER</p>
             ) : gameNotStarted ? (
-              <p className="font-orbitron text-sm font-bold text-text-dim tracking-wider">
-                NOT STARTED
-              </p>
+              <p className="font-orbitron text-sm font-bold text-text-dim tracking-wider">NOT STARTED</p>
             ) : (
-              <p
-                className="font-orbitron text-xl sm:text-2xl font-bold tabular-nums"
-                style={{ color: '#00ff88', textShadow: '0 0 15px rgba(0, 255, 136, 0.4)' }}
-              >
+              <p className="font-orbitron text-xl sm:text-2xl font-bold tabular-nums"
+                 style={{ color: '#00ff88', textShadow: '0 0 15px rgba(0,255,136,0.4)' }}>
                 {formatDuration(countdown)}
               </p>
             )}
             {epochInfo && !isEpochOver && (
               <p className="text-[9px] font-mono text-text-dim mt-1">
-                Epoch #{epochInfo.currentEpoch} · {Math.round(epochInfo.slotIndex / epochInfo.slotsInEpoch * 100)}% complete
+                Epoch #{epochInfo.currentEpoch} · {Math.round((epochInfo.slotIndex / epochInfo.slotsInEpoch) * 100)}% complete
               </p>
             )}
           </div>
 
-          {/* Pot */}
           <div className="rounded border border-border-dim bg-bg-primary/50 p-4 text-center">
             <p className="font-orbitron text-[9px] tracking-[0.25em] text-text-dim uppercase mb-2">
               Epoch Pot
             </p>
-            <p
-              className="font-orbitron text-xl sm:text-2xl font-bold"
-              style={{ color: '#fbbf24', textShadow: '0 0 15px rgba(251, 191, 36, 0.4)' }}
-            >
+            <p className="font-orbitron text-xl sm:text-2xl font-bold"
+               style={{ color: '#fbbf24', textShadow: '0 0 15px rgba(251,191,36,0.4)' }}>
               {epochState ? formatXnt(epochState.pot) : '0.00'}
             </p>
             <p className="text-[9px] font-mono text-gold-mid/50 mt-1">XNT</p>
           </div>
         </div>
 
-        {/* Claim button */}
-        {!isEpochOver && (
-          <div className="text-center">
-            <button
-              onClick={handleClaim}
-              disabled={claiming || isCurrentMaster === true}
-              className="relative group font-orbitron font-bold text-sm tracking-widest uppercase px-8 py-4 rounded border border-purple-glow bg-purple-mid/20 text-purple-light hover:bg-purple-mid/40 hover:shadow-purple-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed w-full sm:w-auto"
-            >
-              <span className="absolute inset-0 rounded border border-purple-light/0 group-hover:border-purple-light/20 transition-all" />
-              {claiming ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-purple-light/40 border-t-purple-light rounded-full animate-spin inline-block" />
-                  Broadcasting...
-                </span>
-              ) : isCurrentMaster ? (
-                '⚡ You Are Master'
-              ) : (
-                `⚔ Become Master — ${claimCost} XNT`
-              )}
-            </button>
-
-            {!connected && (
-              <p className="text-xs text-text-dim font-mono mt-2">
-                Connect wallet to claim
-              </p>
+        {/* Action buttons */}
+        <div className="space-y-3">
+          {/* Become Master */}
+          <button
+            onClick={handleClaim}
+            disabled={claiming || isCurrentMaster === true || isEpochOver || isClosed}
+            className="relative group w-full font-orbitron font-bold text-sm tracking-widest uppercase px-8 py-4 rounded border border-purple-glow bg-purple-mid/20 text-purple-light hover:bg-purple-mid/40 hover:shadow-purple-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className="absolute inset-0 rounded border border-purple-light/0 group-hover:border-purple-light/20 transition-all" />
+            {claiming ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-purple-light/40 border-t-purple-light rounded-full animate-spin inline-block" />
+                Broadcasting...
+              </span>
+            ) : isCurrentMaster ? (
+              '⚡ You Are Master'
+            ) : isEpochOver || isClosed ? (
+              '⚔ Become Master (Epoch Ended)'
+            ) : (
+              `⚔ Become Master — ${claimCost} XNT`
             )}
+          </button>
 
-            {txStatus && (
-              <p className={`text-xs font-mono mt-2 ${txStatus.startsWith('Error') ? 'text-red-400' : 'text-neon-dim'}`}>
-                {txStatus}
-              </p>
-            )}
-          </div>
-        )}
+          {/* Close Epoch — always visible */}
+          <CloseEpochButton
+            epochState={epochState}
+            isEpochOver={isEpochOver}
+            isClosed={isClosed}
+          />
+
+          {/* Hint text */}
+          {!connected && !isEpochOver && (
+            <p className="text-xs text-text-dim font-mono text-center">
+              Connect wallet to claim
+            </p>
+          )}
+          {txStatus && (
+            <p className={`text-xs font-mono text-center ${txStatus.startsWith('Error') ? 'text-red-400' : 'text-neon-dim'}`}>
+              {txStatus}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Bottom accent */}
       <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-purple-glow/30 to-transparent" />
     </section>
   );

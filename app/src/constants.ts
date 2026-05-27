@@ -3,7 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 export const PROGRAM_ID = new PublicKey('BC4y2dVdicttQCFSrBA9DjGxuHQrn3dikzds7twaRXu1');
 export const RPC_ENDPOINT = 'https://xolana.xen.network';
 export const BURN_ADDRESS = new PublicKey('1nc1nerator11111111111111111111111111111111');
-export const EXPLORER_URL = 'https://explorer.xolana.xen.network';
+export const EXPLORER_URL = 'https://explorer.testnet.x1.xyz';
 export const GITHUB_URL = 'https://github.com/X1-Eleven/master-of-the-epoch';
 
 export const EPOCH_STATE_SEED = 'epoch_state';
