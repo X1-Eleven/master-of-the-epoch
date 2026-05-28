@@ -4,12 +4,10 @@ import {
   WalletProvider as _WalletProvider,
   useWallet,
 } from '@solana/wallet-adapter-react';
-import { WalletModalProvider as _WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
-import '@solana/wallet-adapter-react-ui/styles.css';
 
-import { RPC_ENDPOINT } from './constants';
+import { RPC_ENDPOINT, LAMPORTS_PER_XNT } from './constants';
 import { NicknameProvider, useNicknames, NICKNAME_STORAGE_KEY } from './context/NicknameContext';
+import { WalletModalProvider } from './context/WalletModalContext';
 import { useEpochState, getMockLeaderboard, computeClaimCost, computeClaimsCount } from './hooks/useEpochState';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
@@ -19,13 +17,13 @@ import { GameGuide } from './components/GameGuide';
 import { NicknameModal } from './components/NicknameModal';
 import { HallOfMasters } from './components/HallOfMasters';
 import { Footer } from './components/Footer';
+import { WalletSelectModal } from './components/WalletSelectModal';
 
 // Cast providers to resolve @types/react version mismatches with wallet adapter
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ConnectionProvider = _ConnectionProvider as FC<{ children: ReactNode; endpoint: string; config?: any }>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const WalletProvider = _WalletProvider as FC<{ children: ReactNode; wallets: any[]; autoConnect?: boolean }>;
-const WalletModalProvider = _WalletModalProvider as FC<{ children: ReactNode }>;
 
 function AppContent() {
   const { publicKey, connected } = useWallet();
@@ -74,6 +72,9 @@ function AppContent() {
   const claimsCount = epochState ? computeClaimsCount(epochState.nextClaimCost) : 0;
   const isEpochOver = epochInfo?.isOver ?? false;
   const isClosed = epochState?.closed ?? false;
+  const historicalBurnXnt = epochState && epochState.gameId > 1
+    ? (epochState.gameId - 1) * ((epochState.pot / LAMPORTS_PER_XNT) * 0.25)
+    : 0;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -116,6 +117,7 @@ function AppContent() {
           pot={epochState?.pot ?? 0}
           claimCost={claimCost}
           claimsCount={claimsCount}
+          historicalBurnXnt={historicalBurnXnt}
           isLoading={isLoading}
         />
 
@@ -140,11 +142,8 @@ function AppContent() {
 }
 
 export default function App() {
-  const wallets = useMemo(
-    // Backpack auto-registers via Wallet Standard; explicit adapters as fallbacks
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    []
-  );
+  // X1 Wallet and Backpack register via Wallet Standard — no explicit adapters needed
+  const wallets = useMemo(() => [], []);
 
   return (
     <ConnectionProvider endpoint={RPC_ENDPOINT}>
@@ -152,6 +151,7 @@ export default function App() {
         <WalletModalProvider>
           <NicknameProvider>
             <AppContent />
+            <WalletSelectModal />
           </NicknameProvider>
         </WalletModalProvider>
       </WalletProvider>

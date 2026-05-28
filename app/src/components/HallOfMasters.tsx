@@ -1,19 +1,19 @@
-import { formatAddress, formatReignTime } from '../utils/format';
+import { formatAddress } from '../utils/format';
 import { useNicknames } from '../context/NicknameContext';
 
 interface HallEntry {
   wallet: string;
   epochsWon: number;
-  totalReignTime: number;
   totalXntWon: number;
+  totalXntBurned: number;
 }
 
 const MOCK_HALL: HallEntry[] = [
-  { wallet: '7xKpM3AQn4FqRtY8HzWsL2bNc6dVeXpUoKjMiTrEwFg', epochsWon: 5, totalReignTime: 72000, totalXntWon: 1250.5 },
-  { wallet: '3mRtXQ7bPzNvKs4Y8dLhWc9eJfMnBrGiToAp1x6yUqE', epochsWon: 3, totalReignTime: 45800, totalXntWon: 780.0 },
-  { wallet: 'Bj2nL5xWqKm8RsDfPtCvYz4eHoNaUiGj7yTrFpXcB3A', epochsWon: 2, totalReignTime: 28400, totalXntWon: 420.75 },
-  { wallet: 'Fq8sTv2pYmXjKcNwA5dReLhBgZoWiUn9s3PkFtEy1C7', epochsWon: 1, totalReignTime: 15000, totalXntWon: 210.0 },
-  { wallet: '9pLztK2vRcQj7mXs5YeHnDwFaBiGkNuTy3oP8sL1bCx', epochsWon: 1, totalReignTime: 9800, totalXntWon: 147.25 },
+  { wallet: '7xKpM3AQn4FqRtY8HzWsL2bNc6dVeXpUoKjMiTrEwFg', epochsWon: 5, totalXntWon: 1250.5, totalXntBurned: 521.0 },
+  { wallet: '3mRtXQ7bPzNvKs4Y8dLhWc9eJfMnBrGiToAp1x6yUqE', epochsWon: 3, totalXntWon: 780.0,  totalXntBurned: 325.0 },
+  { wallet: 'Bj2nL5xWqKm8RsDfPtCvYz4eHoNaUiGj7yTrFpXcB3A', epochsWon: 2, totalXntWon: 420.75, totalXntBurned: 175.3 },
+  { wallet: 'Fq8sTv2pYmXjKcNwA5dReLhBgZoWiUn9s3PkFtEy1C7', epochsWon: 1, totalXntWon: 210.0,  totalXntBurned: 87.5  },
+  { wallet: '9pLztK2vRcQj7mXs5YeHnDwFaBiGkNuTy3oP8sL1bCx', epochsWon: 1, totalXntWon: 147.25, totalXntBurned: 61.4  },
 ];
 
 const RANK_COLORS = ['#fbbf24', '#94a3b8', '#c2956c', '#7c3aed', '#7c3aed'];
@@ -38,13 +38,13 @@ export function HallOfMasters() {
         </div>
       </div>
 
-      {/* Column headers */}
+      {/* Column headers — 12 cols: 1 rank | 2 name | 3 wallet | 2 epochs | 2 burned | 2 won */}
       <div className="px-6 py-2 grid grid-cols-12 gap-2 border-b border-border-dim/40">
         <span className="col-span-1 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Rank</span>
         <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Name</span>
         <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Wallet</span>
         <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-center">Epochs</span>
-        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Reign</span>
+        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">XNT Burned</span>
         <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">XNT Won</span>
       </div>
 
@@ -60,10 +60,7 @@ export function HallOfMasters() {
               className="px-6 py-3 grid grid-cols-12 gap-2 items-center transition-colors hover:bg-bg-card-hover"
             >
               {/* Rank */}
-              <span
-                className="col-span-1 font-orbitron text-xs font-bold"
-                style={{ color: rankColor }}
-              >
+              <span className="col-span-1 font-orbitron text-xs font-bold" style={{ color: rankColor }}>
                 #{idx + 1}
               </span>
 
@@ -96,15 +93,15 @@ export function HallOfMasters() {
                 </span>
               </div>
 
-              {/* Total Reign Time */}
+              {/* XNT Burned */}
               <span
                 className="col-span-2 font-mono text-xs text-right"
                 style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0,255,136,0.2)' }}
               >
-                {formatReignTime(entry.totalReignTime)}
+                {entry.totalXntBurned.toFixed(1)}
               </span>
 
-              {/* Total XNT Won */}
+              {/* XNT Won */}
               <span className="col-span-2 font-mono text-xs text-right text-gold-bright/80">
                 {entry.totalXntWon.toFixed(1)}
               </span>

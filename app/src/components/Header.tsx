@@ -1,5 +1,5 @@
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { useWalletModal } from '../context/WalletModalContext';
 import { formatAddress } from '../utils/format';
 import { useNicknames } from '../context/NicknameContext';
 
@@ -31,11 +31,8 @@ export function Header({ onEditNickname }: HeaderProps) {
               <h1 className="font-orbitron font-bold text-sm sm:text-base tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-purple-light to-purple-glow">
                 MASTER OF THE EPOCH
               </h1>
-              {/* X1 network badge */}
-              <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-neon-dim/40 bg-neon/5 shrink-0">
-                <span className="font-orbitron font-bold text-[10px] tracking-wide text-neon">X</span>
-                <span className="font-orbitron font-bold text-[10px] tracking-wide text-neon-dim">1</span>
-              </div>
+              {/* X1 logo */}
+              <img src="/x1-logo.png" alt="X1" className="w-5 h-5 rounded-sm object-contain shrink-0" />
             </div>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse inline-block" />

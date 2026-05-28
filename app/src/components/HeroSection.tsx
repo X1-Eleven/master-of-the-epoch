@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import { useWalletModal } from '../context/WalletModalContext';
 import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
@@ -138,7 +138,7 @@ export function HeroSection({
         <div className="flex items-center gap-2 mb-6">
           <div className="h-px flex-1 bg-gradient-to-r from-purple-glow/50 to-transparent" />
           <span className="font-orbitron text-[10px] tracking-[0.3em] text-purple-light/60 uppercase">
-            Current Epoch
+            Epoch {epochState?.gameEpoch ?? ''}
           </span>
           <div className="h-px flex-1 bg-gradient-to-l from-purple-glow/50 to-transparent" />
         </div>

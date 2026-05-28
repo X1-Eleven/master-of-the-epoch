@@ -53,7 +53,7 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
         <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Name</span>
         <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Wallet</span>
         <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Reign Time</span>
-        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Share</span>
+        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Dominance</span>
       </div>
 
       {/* Rows */}
