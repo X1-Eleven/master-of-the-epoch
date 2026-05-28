@@ -108,7 +108,6 @@ function AppContent() {
           epochState={epochState}
           epochInfo={epochInfo}
           isLoading={isLoading}
-          claimCost={claimCost}
           isEpochOver={isEpochOver}
           isClosed={isClosed}
         />

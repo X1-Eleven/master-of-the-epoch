@@ -58,27 +58,33 @@ function BurnCard({ epochBurnXnt, historicalBurnXnt }: BurnCardProps) {
       <p className="font-orbitron text-[9px] tracking-[0.3em] text-text-dim uppercase mb-2">
         XNT Burned (est.)
       </p>
-      {/* Epoch burn */}
-      <p
-        className="font-orbitron text-lg sm:text-xl font-bold tabular-nums"
-        style={{ color, textShadow: `0 0 14px ${shadow}` }}
-      >
-        {epochBurnXnt.toFixed(2)}
-      </p>
-      <p className="text-[9px] font-mono mt-0.5" style={{ color, opacity: 0.5 }}>
-        XNT at epoch close
-      </p>
-      {/* Historical burn */}
-      <div className="mt-2 pt-2 border-t border-border-dim/30">
-        <p
-          className="font-orbitron text-sm font-bold tabular-nums"
-          style={{ color, opacity: 0.75, textShadow: `0 0 10px ${shadow}` }}
-        >
-          {historicalBurnXnt.toFixed(2)}
-        </p>
-        <p className="text-[9px] font-mono mt-0.5" style={{ color, opacity: 0.4 }}>
-          XNT Historical
-        </p>
+      <div className="flex items-start justify-center gap-4">
+        {/* Epoch burn */}
+        <div className="flex-1 text-center">
+          <p
+            className="font-orbitron text-lg sm:text-xl font-bold tabular-nums"
+            style={{ color, textShadow: `0 0 14px ${shadow}` }}
+          >
+            {epochBurnXnt.toFixed(2)}
+          </p>
+          <p className="text-[9px] font-mono mt-0.5" style={{ color, opacity: 0.5 }}>
+            XNT at epoch close
+          </p>
+        </div>
+        {/* Divider */}
+        <div className="w-px self-stretch bg-border-dim/40 mt-0.5" />
+        {/* Historical burn */}
+        <div className="flex-1 text-center">
+          <p
+            className="font-orbitron text-lg sm:text-xl font-bold tabular-nums"
+            style={{ color, textShadow: `0 0 14px ${shadow}` }}
+          >
+            {historicalBurnXnt.toFixed(2)}
+          </p>
+          <p className="text-[9px] font-mono mt-0.5" style={{ color, opacity: 0.5 }}>
+            XNT Historical
+          </p>
+        </div>
       </div>
     </div>
   );

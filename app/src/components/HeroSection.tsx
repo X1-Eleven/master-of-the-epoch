@@ -14,7 +14,6 @@ interface HeroSectionProps {
   epochState: EpochStateData | null;
   epochInfo: EpochInfo | null;
   isLoading: boolean;
-  claimCost: number;
   isEpochOver: boolean;
   isClosed: boolean;
 }
@@ -40,7 +39,7 @@ function ShareButton({ epochNumber, masterDisplay }: { epochNumber: number; mast
 }
 
 export function HeroSection({
-  epochState, epochInfo, isLoading, claimCost, isEpochOver, isClosed,
+  epochState, epochInfo, isLoading, isEpochOver, isClosed,
 }: HeroSectionProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
@@ -146,8 +145,14 @@ export function HeroSection({
         {/* Master display */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <span className="text-gold-mid text-xl">&#9812;</span>
-            <span className="font-orbitron text-xs tracking-[0.25em] text-gold-mid/60 uppercase">
+            <span className="text-gold-mid text-xl" style={{ filter: 'drop-shadow(0 0 8px rgba(251,191,36,0.8))' }}>&#9812;</span>
+            <span
+              className="font-orbitron text-xs tracking-[0.25em] uppercase"
+              style={{
+                color: '#fbbf24',
+                textShadow: '0 0 12px rgba(251,191,36,0.9), 0 0 24px rgba(251,191,36,0.5), 0 0 40px rgba(192,132,252,0.4)',
+              }}
+            >
               Current Master
             </span>
           </div>
@@ -243,7 +248,7 @@ export function HeroSection({
             ) : isEpochOver || isClosed ? (
               '⚔ Become Master (Epoch Ended)'
             ) : (
-              `⚔ Become Master — ${claimCost} XNT`
+              '⚔ BECOME MASTER'
             )}
           </button>
 

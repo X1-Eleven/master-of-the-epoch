@@ -20,7 +20,7 @@ function CopyTreasuryAddress() {
       <button
         onClick={handleCopy}
         title="Copy treasury address"
-        className="inline-flex items-center text-text-dim/40 hover:text-purple-light transition-colors"
+        className="inline-flex items-center opacity-70 hover:opacity-100 transition-opacity"
       >
         {copied ? (
           <svg className="w-3 h-3 text-neon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -89,9 +89,11 @@ export function Footer() {
         </div>
 
         <div className="mt-4 pt-4 border-t border-border-dim/40 text-center">
-          <p className="text-[9px] font-mono text-text-dim/40 tracking-wider inline-flex items-center gap-1.5 flex-wrap justify-center">
-            <span>Master of the Epoch · Built on X1 · Support development with XNT:</span>
-            <CopyTreasuryAddress />
+          <p className="text-xs font-mono tracking-wider inline-flex items-center gap-2 flex-wrap justify-center">
+            <span className="text-white/70">Master of the Epoch · Built on X1 · Support development with XNT:</span>
+            <span style={{ color: '#00ff88', textShadow: '0 0 8px rgba(0,255,136,0.5)' }}>
+              <CopyTreasuryAddress />
+            </span>
           </p>
         </div>
       </div>
