@@ -18,8 +18,8 @@ interface HeroSectionProps {
   isClosed: boolean;
 }
 
-function ShareButton({ epochNumber, masterDisplay }: { epochNumber: number; masterDisplay: string }) {
-  const tweet = `I'm the current Master of Epoch #${epochNumber} on @X1_Blockchain!\nx1mote.xyz\n#MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
+function ShareButton({ masterDisplay }: { masterDisplay: string }) {
+  const tweet = `x1mote.xyz #MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
   const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
 
   return (
@@ -28,10 +28,11 @@ function ShareButton({ epochNumber, masterDisplay }: { epochNumber: number; mast
       target="_blank"
       rel="noopener noreferrer"
       title={`Share as ${masterDisplay}`}
-      className="inline-flex items-center justify-center w-7 h-7 rounded border border-slate-600/40 bg-slate-800/30 text-slate-400 hover:border-slate-400/60 hover:text-slate-200 hover:bg-slate-700/40 transition-all"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-slate-600/40 bg-slate-800/30 text-slate-400 hover:border-slate-400/60 hover:text-slate-200 hover:bg-slate-700/40 transition-all text-[10px] font-mono tracking-wide"
     >
+      Show Who&apos;s Master!
       {/* X / Twitter logo */}
-      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+      <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.261 5.633 5.903-5.633zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
       </svg>
     </a>
@@ -70,7 +71,8 @@ export function HeroSection({
     : (epochState ? formatAddress(epochState.currentMaster, 6) : '—');
 
   async function handleClaim() {
-    if (!connected || !publicKey || !signTransaction || !epochState) { setVisible(true); return; }
+    if (!connected || !publicKey) { setVisible(true); return; }
+    if (!signTransaction || !epochState) return;
     setClaiming(true);
     setTxStatus(null);
     try {
@@ -137,7 +139,9 @@ export function HeroSection({
         <div className="flex items-center gap-2 mb-6">
           <div className="h-px flex-1 bg-gradient-to-r from-purple-glow/50 to-transparent" />
           <span className="font-orbitron text-[10px] tracking-[0.3em] text-purple-light/60 uppercase">
-            Epoch {epochState?.gameEpoch ?? ''}
+            Epoch {(!epochState || epochState.currentMaster === NULL_PUBLIC_KEY)
+              ? (epochInfo?.currentEpoch ?? '')
+              : (epochState.gameEpoch)}
           </span>
           <div className="h-px flex-1 bg-gradient-to-l from-purple-glow/50 to-transparent" />
         </div>
@@ -183,7 +187,6 @@ export function HeroSection({
                   {formatAddress(epochState!.currentMaster, 6)}
                 </p>
                 <ShareButton
-                  epochNumber={epochState!.gameEpoch}
                   masterDisplay={masterDisplay}
                 />
               </div>
@@ -244,7 +247,7 @@ export function HeroSection({
                 Broadcasting...
               </span>
             ) : isCurrentMaster ? (
-              '⚡ You Are Master'
+              '⚡ You Are The Master'
             ) : isEpochOver || isClosed ? (
               '⚔ Become Master (Epoch Ended)'
             ) : (

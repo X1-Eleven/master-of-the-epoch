@@ -138,11 +138,6 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
         )}
       </div>
 
-      <div className="px-6 py-2 border-t border-border-dim/40">
-        <p className="text-[9px] font-mono text-text-dim">
-          * Leaderboard reflects mock data until live indexing is available
-        </p>
-      </div>
     </section>
   );
 }

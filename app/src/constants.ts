@@ -8,6 +8,7 @@ export const GITHUB_URL = 'https://github.com/X1-Eleven/master-of-the-epoch';
 
 export const EPOCH_STATE_SEED = 'epoch_state';
 export const MASTER_RECORD_SEED = 'master_record';
+export const GAME_COUNTER_SEED = 'game_counter';
 
 export const LAMPORTS_PER_XNT = 1_000_000_000;
 export const BASE_CLAIM_COST_XNT = 5;

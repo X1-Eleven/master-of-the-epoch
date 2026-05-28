@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Dark background gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#050508;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0a0815;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#050508;stop-opacity:1" />
+    </linearGradient>
+    <!-- Gold glow filter -->
+    <filter id="gold-glow" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Purple glow filter -->
+    <filter id="purple-glow" x="-10%" y="-40%" width="120%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Green glow filter -->
+    <filter id="green-glow" x="-10%" y="-40%" width="120%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Top accent gradient -->
+    <linearGradient id="accent-top" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0" />
+      <stop offset="50%" style="stop-color:#c084fc;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0" />
+    </linearGradient>
+    <!-- Bottom accent gradient -->
+    <linearGradient id="accent-bottom" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0" />
+      <stop offset="50%" style="stop-color:#00ff88;stop-opacity:0.5" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)" />
+
+  <!-- Grid lines (subtle cypherpunk effect) -->
+  <g opacity="0.06" stroke="#7c3aed" stroke-width="1">
+    <!-- Vertical lines every 80px -->
+    <line x1="80" y1="0" x2="80" y2="630" />
+    <line x1="160" y1="0" x2="160" y2="630" />
+    <line x1="240" y1="0" x2="240" y2="630" />
+    <line x1="320" y1="0" x2="320" y2="630" />
+    <line x1="400" y1="0" x2="400" y2="630" />
+    <line x1="480" y1="0" x2="480" y2="630" />
+    <line x1="560" y1="0" x2="560" y2="630" />
+    <line x1="640" y1="0" x2="640" y2="630" />
+    <line x1="720" y1="0" x2="720" y2="630" />
+    <line x1="800" y1="0" x2="800" y2="630" />
+    <line x1="880" y1="0" x2="880" y2="630" />
+    <line x1="960" y1="0" x2="960" y2="630" />
+    <line x1="1040" y1="0" x2="1040" y2="630" />
+    <line x1="1120" y1="0" x2="1120" y2="630" />
+    <!-- Horizontal lines every 70px -->
+    <line x1="0" y1="70" x2="1200" y2="70" />
+    <line x1="0" y1="140" x2="1200" y2="140" />
+    <line x1="0" y1="210" x2="1200" y2="210" />
+    <line x1="0" y1="280" x2="1200" y2="280" />
+    <line x1="0" y1="350" x2="1200" y2="350" />
+    <line x1="0" y1="420" x2="1200" y2="420" />
+    <line x1="0" y1="490" x2="1200" y2="490" />
+    <line x1="0" y1="560" x2="1200" y2="560" />
+  </g>
+
+  <!-- Radial purple glow center -->
+  <radialGradient id="center-glow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0.15" />
+    <stop offset="100%" style="stop-color:#050508;stop-opacity:0" />
+  </radialGradient>
+  <rect width="1200" height="630" fill="url(#center-glow)" />
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="1200" height="3" fill="url(#accent-top)" />
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="627" width="1200" height="3" fill="url(#accent-bottom)" />
+
+  <!-- Corner decorations -->
+  <g stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.5">
+    <polyline points="40,40 40,80 80,80" />
+    <polyline points="1160,40 1160,80 1120,80" />
+    <polyline points="40,590 40,550 80,550" />
+    <polyline points="1160,590 1160,550 1120,550" />
+  </g>
+
+  <!-- Chess king / crown icon (simplified) -->
+  <g transform="translate(540, 95)" filter="url(#gold-glow)">
+    <text font-size="72" fill="#fbbf24" opacity="0.9" text-anchor="middle" dominant-baseline="middle">&#9812;</text>
+  </g>
+
+  <!-- Main headline -->
+  <text
+    x="600"
+    y="255"
+    text-anchor="middle"
+    font-family="'Orbitron', 'Share Tech Mono', monospace"
+    font-weight="900"
+    font-size="58"
+    letter-spacing="2"
+    fill="#fbbf24"
+    filter="url(#gold-glow)"
+  >I&apos;m the current</text>
+
+  <text
+    x="600"
+    y="330"
+    text-anchor="middle"
+    font-family="'Orbitron', 'Share Tech Mono', monospace"
+    font-weight="900"
+    font-size="58"
+    letter-spacing="2"
+    fill="#fbbf24"
+    filter="url(#gold-glow)"
+  >Master of the Epoch!</text>
+
+  <!-- Decorative separator -->
+  <g opacity="0.6">
+    <line x1="300" y1="368" x2="520" y2="368" stroke="#7c3aed" stroke-width="1" />
+    <circle cx="600" cy="368" r="4" fill="#c084fc" />
+    <line x1="680" y1="368" x2="900" y2="368" stroke="#7c3aed" stroke-width="1" />
+  </g>
+
+  <!-- Subtitle -->
+  <text
+    x="600"
+    y="420"
+    text-anchor="middle"
+    font-family="'Orbitron', 'Share Tech Mono', monospace"
+    font-weight="600"
+    font-size="30"
+    letter-spacing="8"
+    fill="#c084fc"
+    filter="url(#purple-glow)"
+  >— X1 BLOCKCHAIN —</text>
+
+  <!-- URL at bottom -->
+  <text
+    x="600"
+    y="560"
+    text-anchor="middle"
+    font-family="'Share Tech Mono', 'Courier New', monospace"
+    font-size="22"
+    letter-spacing="4"
+    fill="#00ff88"
+    filter="url(#green-glow)"
+  >x1mote.xyz</text>
+
+  <!-- XNT label bottom right -->
+  <text
+    x="1150"
+    y="600"
+    text-anchor="end"
+    font-family="'Share Tech Mono', monospace"
+    font-size="13"
+    letter-spacing="3"
+    fill="#7c3aed"
+    opacity="0.6"
+  >#MOTE #XNT</text>
+</svg>

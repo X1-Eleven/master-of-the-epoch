@@ -8,7 +8,7 @@ import {
 import { RPC_ENDPOINT, LAMPORTS_PER_XNT } from './constants';
 import { NicknameProvider, useNicknames, NICKNAME_STORAGE_KEY } from './context/NicknameContext';
 import { WalletModalProvider } from './context/WalletModalContext';
-import { useEpochState, getMockLeaderboard, computeClaimCost, computeClaimsCount } from './hooks/useEpochState';
+import { useEpochState, computeClaimCost, computeClaimsCount } from './hooks/useEpochState';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { LiveStatsBar } from './components/LiveStatsBar';
@@ -28,7 +28,7 @@ const WalletProvider = _WalletProvider as FC<{ children: ReactNode; wallets: any
 function AppContent() {
   const { publicKey, connected } = useWallet();
   const { setNickname } = useNicknames();
-  const { epochState, epochInfo, isLoading, error } = useEpochState();
+  const { epochState, epochInfo, leaderboard, isLoading, error } = useEpochState();
 
   // Nickname modal state: null = closed, otherwise {address, initial}
   const [nicknameModal, setNicknameModal] = useState<{ address: string; initial: string } | null>(null);
@@ -62,11 +62,6 @@ function AppContent() {
     if (nicknameModal) setNickname(nicknameModal.address, name);
     setNicknameModal(null);
   }
-
-  const leaderboard = useMemo(
-    () => (epochState ? getMockLeaderboard(epochState) : []),
-    [epochState]
-  );
 
   const claimCost = epochState ? computeClaimCost(epochState.nextClaimCost) : 5;
   const claimsCount = epochState ? computeClaimsCount(epochState.nextClaimCost) : 0;
