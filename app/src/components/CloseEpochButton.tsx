@@ -18,6 +18,9 @@ interface CloseEpochButtonProps {
   onRefresh: () => void;
 }
 
+const INIT_MAX_TRIES = 3;
+const INIT_RETRY_DELAY_MS = 2000;
+
 function getErrorMessage(e: unknown): string {
   if (!(e instanceof Error)) return String(e).slice(0, 200);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,57 +42,134 @@ function getErrorMessage(e: unknown): string {
 export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh }: CloseEpochButtonProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
-  const [closing, setClosing] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'closing' | 'initializing'>('idle');
+  // 1-based attempt counter shown in the button label during auto-retry; 0 = not retrying
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [txStatus, setTxStatus] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
+  // true when close_epoch confirmed but all initialize_epoch attempts failed
+  const [needsInit, setNeedsInit] = useState(false);
 
+  const busy = phase !== 'idle';
   const canClose = isEpochOver && !isClosed && !!epochState;
+  const canAct = (canClose || needsInit) && !busy;
+  // Emergency button: visible when epoch closed but not yet re-initialized,
+  // whether detected this session (needsInit) or after a page refresh (isClosed+isEpochOver).
+  const showEmergencyInit = !busy && (needsInit || (isClosed && isEpochOver));
   const callerReward = epochState ? (epochState.pot / LAMPORTS_PER_XNT) * 0.05 : 0;
+
+  async function sendAndConfirm(connection: Connection, tx: Transaction): Promise<string> {
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = publicKey!;
+    const signed = await signTransaction!(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    return sig;
+  }
+
+  // Sends initialize_epoch, retrying up to INIT_MAX_TRIES times on failure.
+  // Throws the last error if all attempts fail.
+  async function sendInitWithRetry(
+    connection: Connection,
+    program: Program,
+    epochStatePDA: PublicKey,
+    gameCounterPDA: PublicKey,
+  ): Promise<string> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= INIT_MAX_TRIES; attempt++) {
+      setRetryAttempt(attempt);
+      if (attempt > 1) {
+        await new Promise<void>((r) => setTimeout(r, INIT_RETRY_DELAY_MS));
+      }
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const initIx = await (program.methods as any).initializeEpoch()
+          .accounts({
+            epochState: epochStatePDA,
+            gameCounter: gameCounterPDA,
+            payer: publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction();
+        const tx = new Transaction();
+        tx.add(initIx);
+        return await sendAndConfirm(connection, tx);
+      } catch (e: unknown) {
+        lastError = e;
+        console.warn(`[MOTE] initialize_epoch attempt ${attempt}/${INIT_MAX_TRIES} failed:`, e);
+      }
+    }
+    throw lastError;
+  }
+
+  function makeConnection(): [Connection, Program] {
+    const connection = new Connection(RPC_ENDPOINT, 'confirmed');
+    const provider = new AnchorProvider(
+      connection,
+      {
+        publicKey: publicKey!,
+        signTransaction: signTransaction!,
+        signAllTransactions: async (txs: Transaction[]) =>
+          Promise.all(txs.map((tx) => signTransaction!(tx))),
+      } as never,
+      { commitment: 'confirmed' }
+    );
+    return [connection, new Program(IDL as unknown as Idl, provider)];
+  }
 
   async function handleClose() {
     if (!connected || !publicKey) { setVisible(true); return; }
     if (!signTransaction || !epochState) return;
-    if (closing) return;
+    if (busy) return;
 
-    setClosing(true);
-    // Bug 3: clear ALL previous messages before each attempt
     setTxStatus(null);
     setIsError(false);
+    setRetryAttempt(0);
 
+    const [connection, program] = makeConnection();
+    const [epochStatePDA] = PublicKey.findProgramAddressSync([Buffer.from(EPOCH_STATE_SEED)], PROGRAM_ID);
+    const [gameCounterPDA] = PublicKey.findProgramAddressSync([Buffer.from(GAME_COUNTER_SEED)], PROGRAM_ID);
+
+    // ── Retry path: close_epoch already confirmed, only need initialize ───────
+    if (needsInit) {
+      setPhase('initializing');
+      try {
+        const sig = await sendInitWithRetry(connection, program, epochStatePDA, gameCounterPDA);
+        setNeedsInit(false);
+        setTxStatus(`New epoch started! tx: ${sig.slice(0, 8)}...`);
+        setIsError(false);
+        onRefresh();
+      } catch (e: unknown) {
+        setIsError(true);
+        setTxStatus(`Failed to start new epoch — ${getErrorMessage(e)}`);
+      } finally {
+        setPhase('idle');
+        setRetryAttempt(0);
+      }
+      return;
+    }
+
+    // ── Step 1: close_epoch ──────────────────────────────────────────────────
+    const [currentMasterRecord] = PublicKey.findProgramAddressSync(
+      [Buffer.from(MASTER_RECORD_SEED), new PublicKey(epochState.currentMaster).toBuffer()],
+      PROGRAM_ID
+    );
+
+    let closeSig: string;
     try {
-      const connection = new Connection(RPC_ENDPOINT, 'confirmed');
-      const provider = new AnchorProvider(
-        connection,
-        {
-          publicKey,
-          signTransaction,
-          // Bug 2: properly implement signAllTransactions so Anchor never bypasses signing
-          signAllTransactions: async (txs: Transaction[]) =>
-            Promise.all(txs.map((tx) => signTransaction(tx))),
-        } as never,
-        { commitment: 'confirmed' }
-      );
-      const program = new Program(IDL as unknown as Idl, provider);
-
-      const [epochStatePDA] = PublicKey.findProgramAddressSync([Buffer.from(EPOCH_STATE_SEED)], PROGRAM_ID);
-      const [currentMasterRecord] = PublicKey.findProgramAddressSync(
-        [Buffer.from(MASTER_RECORD_SEED), new PublicKey(epochState.currentMaster).toBuffer()],
-        PROGRAM_ID
-      );
-      const [gameCounterPDA] = PublicKey.findProgramAddressSync([Buffer.from(GAME_COUNTER_SEED)], PROGRAM_ID);
-
-      // Determine winner (same logic as the on-chain handler)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const masterRecordData = await (program.account as any).masterRecord.fetch(currentMasterRecord);
       const now = Math.floor(Date.now() / 1000);
       const storedReignTime = (masterRecordData.totalReignTime as BN).toNumber();
-      const ongoingReignTime = now - epochState.masterSince;
-      const currentTotal = storedReignTime + ongoingReignTime;
+      const currentTotal = storedReignTime + (now - epochState.masterSince);
       const winner =
         currentTotal >= epochState.leadingMasterTime
           ? new PublicKey(epochState.currentMaster)
           : new PublicKey(epochState.leadingMaster);
-
       const treasuryKey = new PublicKey(epochState.treasury);
 
       console.log('[MOTE] closeEpoch accounts:', {
@@ -100,23 +180,9 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
         treasury: treasuryKey.toString(),
         burnAddress: BURN_ADDRESS.toString(),
       });
-      console.log('[MOTE] winner determination:', {
-        currentMaster: epochState.currentMaster,
-        leadingMaster: epochState.leadingMaster,
-        storedReignTime,
-        ongoingReignTime,
-        currentTotal,
-        leadingMasterTime: epochState.leadingMasterTime,
-        winnerIsCurrentMaster: currentTotal >= epochState.leadingMasterTime,
-      });
-      console.log('[MOTE] initializeEpoch accounts:', {
-        epochState: epochStatePDA.toString(),
-        gameCounter: gameCounterPDA.toString(),
-        payer: publicKey.toString(),
-        systemProgram: SystemProgram.programId.toString(),
-      });
 
-      // build both instructions and combine into one atomic transaction
+      setPhase('closing');
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const closeIx = await (program.methods as any).closeEpoch()
         .accounts({
@@ -128,80 +194,127 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
           burnAddress: BURN_ADDRESS,
         })
         .instruction();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const initIx = await (program.methods as any).initializeEpoch()
-        .accounts({
-          epochState: epochStatePDA,
-          gameCounter: gameCounterPDA,
-          payer: publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .instruction();
-
       const tx = new Transaction();
-      tx.add(closeIx, initIx);
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-      tx.recentBlockhash = blockhash;
-      tx.feePayer = publicKey;
+      tx.add(closeIx);
+      closeSig = await sendAndConfirm(connection, tx);
+    } catch (e: unknown) {
+      setPhase('idle');
+      setIsError(true);
+      setTxStatus(`Step 1 failed — ${getErrorMessage(e)}`);
+      return;
+    }
 
-      // Sign once — user sees a single wallet popup
-      const signedTx = await signTransaction(tx);
-      const sig = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: false,
-        preflightCommitment: 'confirmed',
-      });
-      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    console.log('[MOTE] close_epoch confirmed:', closeSig);
 
-      setTxStatus(`Epoch closed & new game started! tx: ${sig.slice(0, 8)}...`);
+    // ── Step 2: initialize_epoch with auto-retry ─────────────────────────────
+    setPhase('initializing');
+    try {
+      const initSig = await sendInitWithRetry(connection, program, epochStatePDA, gameCounterPDA);
+      setNeedsInit(false);
+      setTxStatus(`Epoch closed & new game started! tx: ${initSig.slice(0, 8)}...`);
       setIsError(false);
-      // Bug 5: immediately refresh state after successful transaction
       onRefresh();
     } catch (e: unknown) {
-      // Reset button state first so it's immediately retryable, then show error
-      setClosing(false);
+      // close_epoch landed; user can retry step 2 via the main button or emergency button
+      setNeedsInit(true);
       setIsError(true);
-      setTxStatus(getErrorMessage(e));
+      setTxStatus(
+        `Epoch closed (tx: ${closeSig.slice(0, 8)}...) but failed to start new epoch after ${INIT_MAX_TRIES} attempts.`
+      );
     } finally {
-      setClosing(false);
+      setPhase('idle');
+      setRetryAttempt(0);
     }
+  }
+
+  async function handleEmergencyInit() {
+    if (!connected || !publicKey) { setVisible(true); return; }
+    if (!signTransaction) return;
+    if (busy) return;
+
+    setTxStatus(null);
+    setIsError(false);
+    setRetryAttempt(0);
+
+    const [connection, program] = makeConnection();
+    const [epochStatePDA] = PublicKey.findProgramAddressSync([Buffer.from(EPOCH_STATE_SEED)], PROGRAM_ID);
+    const [gameCounterPDA] = PublicKey.findProgramAddressSync([Buffer.from(GAME_COUNTER_SEED)], PROGRAM_ID);
+
+    setPhase('initializing');
+    try {
+      const sig = await sendInitWithRetry(connection, program, epochStatePDA, gameCounterPDA);
+      setNeedsInit(false);
+      setTxStatus(`New epoch started! tx: ${sig.slice(0, 8)}...`);
+      setIsError(false);
+      onRefresh();
+    } catch (e: unknown) {
+      setIsError(true);
+      setTxStatus(`Failed to start new epoch — ${getErrorMessage(e)}`);
+    } finally {
+      setPhase('idle');
+      setRetryAttempt(0);
+    }
+  }
+
+  function buttonLabel() {
+    if (phase === 'closing') {
+      return (
+        <span className="flex items-center justify-center gap-2">
+          <span className="w-4 h-4 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin inline-block" />
+          Closing epoch... (1/2)
+        </span>
+      );
+    }
+    if (phase === 'initializing') {
+      const label = retryAttempt > 1
+        ? `Starting new epoch... retrying (${retryAttempt}/${INIT_MAX_TRIES})`
+        : 'Starting new epoch... (2/2)';
+      return (
+        <span className="flex items-center justify-center gap-2">
+          <span className="w-4 h-4 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin inline-block" />
+          {label}
+        </span>
+      );
+    }
+    if (needsInit) return '↺ Retry: Start New Epoch';
+    if (isClosed) return '✓ Epoch Already Closed';
+    if (!isEpochOver) return 'Close Epoch & Claim Reward (Inactive)';
+    return `Close Epoch & Claim Reward — earn ${callerReward.toFixed(2)} XNT (5%)`;
   }
 
   return (
     <div>
       <button
         onClick={handleClose}
-        disabled={!canClose || closing}
+        disabled={!canAct}
         className={`w-full font-orbitron font-bold text-sm tracking-widest uppercase px-8 py-4 rounded border transition-all duration-200 disabled:cursor-not-allowed ${
-          canClose
+          canAct
             ? 'border-red-500/60 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/80 hover:shadow-[0_0_20px_rgba(239,68,68,0.3)]'
             : 'border-border-dim bg-transparent text-text-dim/40 opacity-50'
         }`}
       >
-        {closing ? (
-          <span className="flex items-center justify-center gap-2">
-            <span className="w-4 h-4 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin inline-block" />
-            Closing & Restarting Epoch...
-          </span>
-        ) : isClosed ? (
-          '✓ Epoch Already Closed'
-        ) : !isEpochOver ? (
-          'Close Epoch & Claim Reward (Inactive)'
-        ) : (
-          `Close Epoch & Claim Reward — earn ${callerReward.toFixed(2)} XNT (5%)`
-        )}
+        {buttonLabel()}
       </button>
 
-      {canClose && (
+      {canClose && !needsInit && (
         <p className="text-[10px] font-mono text-white/70 text-center mt-1.5">
           Pot: {epochState ? formatXnt(epochState.pot) : '0'} XNT · 60% winner · 25% burn · 10% treasury · 5% you
         </p>
       )}
 
-      {txStatus && !closing && (
+      {txStatus && !busy && (
         <p className={`text-xs font-mono text-center mt-2 ${isError ? 'text-red-400' : 'text-neon-dim'}`}>
           {txStatus}
         </p>
+      )}
+
+      {showEmergencyInit && (
+        <button
+          onClick={handleEmergencyInit}
+          className="mt-2 w-full font-orbitron font-bold text-xs tracking-widest uppercase px-6 py-3 rounded border border-amber-500/60 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/80 hover:shadow-[0_0_16px_rgba(245,158,11,0.3)] transition-all duration-200"
+        >
+          ⚡ Start New Epoch
+        </button>
       )}
     </div>
   );
