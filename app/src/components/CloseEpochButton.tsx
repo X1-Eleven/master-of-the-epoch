@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
-import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl, BN } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData } from '../hooks/useEpochState';
@@ -108,7 +108,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
         .instruction();
 
       const tx = new Transaction();
-      tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10000 }), closeIx, initIx);
+      tx.add(closeIx, initIx);
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;

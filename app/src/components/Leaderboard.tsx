@@ -49,11 +49,11 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
 
       {/* Column headers */}
       <div className="px-6 py-2 grid grid-cols-12 gap-2 border-b border-border-dim/40">
-        <span className="col-span-1 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Rank</span>
-        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Name</span>
-        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase">Wallet</span>
-        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Reign Time</span>
-        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-text-dim uppercase text-right">Dominance</span>
+        <span className="col-span-1 font-orbitron text-[9px] tracking-wider text-white uppercase">Rank</span>
+        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-white uppercase">Name</span>
+        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-white uppercase">Wallet</span>
+        <span className="col-span-3 font-orbitron text-[9px] tracking-wider text-white uppercase text-right">Reign Time</span>
+        <span className="col-span-2 font-orbitron text-[9px] tracking-wider text-white uppercase text-right">Dominance</span>
       </div>
 
       {/* Rows */}

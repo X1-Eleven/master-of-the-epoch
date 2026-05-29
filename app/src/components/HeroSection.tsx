@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
-import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData, EpochInfo } from '../hooks/useEpochState';
@@ -34,7 +34,7 @@ function getErrorMessage(e: unknown): string {
 }
 
 function ShareButton({ masterDisplay }: { masterDisplay: string }) {
-  const tweet = `x1mote.xyz #MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
+  const tweet = `${masterDisplay} is the Master of the Epoch! x1mote.xyz #MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
   const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
 
   return (
@@ -42,8 +42,8 @@ function ShareButton({ masterDisplay }: { masterDisplay: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      title={`Share as ${masterDisplay}`}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-slate-600/40 bg-slate-800/30 text-slate-400 hover:border-slate-400/60 hover:text-slate-200 hover:bg-slate-700/40 transition-all text-[10px] font-mono tracking-wide"
+      title="Share on X"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-slate-600/40 bg-slate-800/30 text-slate-400 hover:border-slate-400/60 hover:text-slate-200 hover:bg-slate-700/40 transition-all text-[10px] font-mono tracking-wide shrink-0"
     >
       Show Them!!
       {/* X / Twitter logo */}
@@ -158,7 +158,7 @@ export function HeroSection({
         .instruction();
 
       const tx = new Transaction();
-      tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10000 }), ix);
+      tx.add(ix);
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
@@ -205,7 +205,7 @@ export function HeroSection({
         {/* Epoch label */}
         <div className="flex items-center gap-2 mb-6">
           <div className="h-px flex-1 bg-gradient-to-r from-purple-glow/50 to-transparent" />
-          <span className="font-orbitron text-[10px] tracking-[0.3em] text-purple-light/60 uppercase">
+          <span className="font-orbitron text-[10px] tracking-[0.3em] text-white uppercase">
             Epoch {(!epochState || epochState.currentMaster === NULL_PUBLIC_KEY)
               ? (epochInfo?.currentEpoch ?? '')
               : (epochState.gameEpoch)}
@@ -246,16 +246,14 @@ export function HeroSection({
                   {masterNickname}
                 </p>
               )}
-              {/* Address centered on its own line; share button floats independently */}
-              <div className="relative flex items-center justify-center">
+              {/* Address + share button inline */}
+              <div className="flex items-center justify-center gap-2 flex-wrap">
                 <p className="font-mono text-base sm:text-xl font-bold tracking-wider animate-flicker"
                    style={{ color: masterNickname !== 'Anonymous' ? 'rgba(251,191,36,0.65)' : '#fbbf24',
                             textShadow: '0 0 15px rgba(251,191,36,0.35)' }}>
                   {formatAddress(epochState!.currentMaster, 6)}
                 </p>
-                <div className="absolute left-full ml-2">
-                  <ShareButton masterDisplay={masterDisplay} />
-                </div>
+                <ShareButton masterDisplay={masterDisplay} />
               </div>
               {/* Bug 4: stop "Reigning for" timer once epoch is over */}
               <p className="text-xs text-gold-mid/50 font-mono mt-1">

@@ -107,7 +107,7 @@ export function LiveStatsBar({ pot, claimCost, claimsCount, historicalBurnXnt, i
     <section>
       <div className="flex items-center gap-2 mb-3">
         <span className="w-1.5 h-1.5 rounded-full bg-neon animate-pulse inline-block" />
-        <span className="font-orbitron text-[9px] tracking-[0.3em] text-neon-dim/70 uppercase">
+        <span className="font-orbitron text-[9px] tracking-[0.3em] text-white uppercase">
           Live Stats
         </span>
       </div>
