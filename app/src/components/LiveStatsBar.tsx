@@ -28,7 +28,7 @@ function StatCard({ label, value, sub, color = 'green' }: StatCardProps) {
       className="flex-1 rounded border bg-bg-primary/40 p-4 text-center transition-all hover:bg-bg-card-hover"
       style={{ borderColor: c.border }}
     >
-      <p className="font-orbitron text-[9px] tracking-[0.3em] text-text-dim uppercase mb-2">{label}</p>
+      <p className="font-orbitron text-[9px] tracking-[0.3em] text-white/70 uppercase mb-2">{label}</p>
       <p
         className="font-orbitron text-lg sm:text-xl font-bold tabular-nums"
         style={{ color: c.text, textShadow: `0 0 14px ${c.shadow}` }}
@@ -55,7 +55,7 @@ function BurnCard({ epochBurnXnt, historicalBurnXnt }: BurnCardProps) {
       className="flex-1 rounded border bg-bg-primary/40 p-4 text-center transition-all hover:bg-bg-card-hover"
       style={{ borderColor: border }}
     >
-      <p className="font-orbitron text-[9px] tracking-[0.3em] text-text-dim uppercase mb-2">
+      <p className="font-orbitron text-[9px] tracking-[0.3em] text-white/70 uppercase mb-2">
         XNT Burned (est.)
       </p>
       <div className="flex items-start justify-center gap-4">

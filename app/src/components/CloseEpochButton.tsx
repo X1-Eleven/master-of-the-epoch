@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
-import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl, BN } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData } from '../hooks/useEpochState';
@@ -108,7 +108,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
         .instruction();
 
       const tx = new Transaction();
-      tx.add(closeIx, initIx);
+      tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10000 }), closeIx, initIx);
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
@@ -126,9 +126,10 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       // Bug 5: immediately refresh state after successful transaction
       onRefresh();
     } catch (e: unknown) {
-      // Bug 3: show raw AnchorError text as a friendly message
-      setTxStatus(getErrorMessage(e));
+      // Reset button state first so it's immediately retryable, then show error
+      setClosing(false);
       setIsError(true);
+      setTxStatus(getErrorMessage(e));
     } finally {
       setClosing(false);
     }

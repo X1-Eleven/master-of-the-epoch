@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
-import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData, EpochInfo } from '../hooks/useEpochState';
@@ -158,7 +158,7 @@ export function HeroSection({
         .instruction();
 
       const tx = new Transaction();
-      tx.add(ix);
+      tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10000 }), ix);
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
@@ -175,11 +175,11 @@ export function HeroSection({
       // Bug 5: immediately refresh state instead of waiting for the next 5-second poll
       onRefresh();
     } catch (e: unknown) {
-      // Bug 3: show raw AnchorError text as friendly message
-      setTxStatus(getErrorMessage(e));
+      // Reset button state first so it's immediately retryable, then show error
+      setClaiming(false);
       setTxIsError(true);
+      setTxStatus(getErrorMessage(e));
     } finally {
-      // Bug 2: always reset claiming so the button is never permanently disabled
       setClaiming(false);
     }
   }
@@ -268,7 +268,7 @@ export function HeroSection({
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="rounded border border-border-dim bg-bg-primary/50 p-4 text-center">
-            <p className="font-orbitron text-[9px] tracking-[0.25em] text-text-dim uppercase mb-2">
+            <p className="font-orbitron text-[9px] tracking-[0.25em] text-white/70 uppercase mb-2">
               Time Remaining
             </p>
             {isEpochOver ? (
@@ -289,7 +289,7 @@ export function HeroSection({
           </div>
 
           <div className="rounded border border-border-dim bg-bg-primary/50 p-4 text-center">
-            <p className="font-orbitron text-[9px] tracking-[0.25em] text-text-dim uppercase mb-2">
+            <p className="font-orbitron text-[9px] tracking-[0.25em] text-white/70 uppercase mb-2">
               Epoch Pot
             </p>
             <p className="font-orbitron text-xl sm:text-2xl font-bold"
