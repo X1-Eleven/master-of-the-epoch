@@ -18,18 +18,22 @@ interface CloseEpochButtonProps {
   onRefresh: () => void;
 }
 
-// Bug 3: extract a user-friendly message from any Anchor/wallet error
 function getErrorMessage(e: unknown): string {
-  if (!(e instanceof Error)) return String(e).slice(0, 120);
+  if (!(e instanceof Error)) return String(e).slice(0, 200);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ae = e as any;
+  if (ae.logs?.length) {
+    console.error('[MOTE] Transaction logs:', ae.logs);
+    const errLine = (ae.logs as string[]).find((l) => l.includes('Error Message:'));
+    if (errLine) return errLine.replace(/.*Error Message:\s*/, '');
+    const programErr = (ae.logs as string[]).find((l) => l.includes('custom program error'));
+    if (programErr) return programErr;
+    const failedLine = (ae.logs as string[]).find((l) => l.includes('failed'));
+    if (failedLine) return failedLine.slice(0, 200);
+  }
   if (ae.error?.errorMessage) return ae.error.errorMessage;
   if (ae.errorMessage) return ae.errorMessage;
-  if (ae.logs?.length) {
-    const line = (ae.logs as string[]).find((l) => l.includes('Error Message:'));
-    if (line) return line.replace(/.*Error Message:\s*/, '');
-  }
-  return e.message.slice(0, 120);
+  return e.message.slice(0, 200);
 }
 
 export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh }: CloseEpochButtonProps) {
@@ -78,13 +82,41 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const masterRecordData = await (program.account as any).masterRecord.fetch(currentMasterRecord);
       const now = Math.floor(Date.now() / 1000);
-      const currentTotal = (masterRecordData.totalReignTime as BN).toNumber() + (now - epochState.masterSince);
+      const storedReignTime = (masterRecordData.totalReignTime as BN).toNumber();
+      const ongoingReignTime = now - epochState.masterSince;
+      const currentTotal = storedReignTime + ongoingReignTime;
       const winner =
         currentTotal >= epochState.leadingMasterTime
           ? new PublicKey(epochState.currentMaster)
           : new PublicKey(epochState.leadingMaster);
 
-      // Bug 1: build both instructions and combine into one atomic transaction
+      const treasuryKey = new PublicKey(epochState.treasury);
+
+      console.log('[MOTE] closeEpoch accounts:', {
+        epochState: epochStatePDA.toString(),
+        currentMasterRecord: currentMasterRecord.toString(),
+        caller: publicKey.toString(),
+        winner: winner.toString(),
+        treasury: treasuryKey.toString(),
+        burnAddress: BURN_ADDRESS.toString(),
+      });
+      console.log('[MOTE] winner determination:', {
+        currentMaster: epochState.currentMaster,
+        leadingMaster: epochState.leadingMaster,
+        storedReignTime,
+        ongoingReignTime,
+        currentTotal,
+        leadingMasterTime: epochState.leadingMasterTime,
+        winnerIsCurrentMaster: currentTotal >= epochState.leadingMasterTime,
+      });
+      console.log('[MOTE] initializeEpoch accounts:', {
+        epochState: epochStatePDA.toString(),
+        gameCounter: gameCounterPDA.toString(),
+        payer: publicKey.toString(),
+        systemProgram: SystemProgram.programId.toString(),
+      });
+
+      // build both instructions and combine into one atomic transaction
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const closeIx = await (program.methods as any).closeEpoch()
         .accounts({
@@ -92,7 +124,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
           currentMasterRecord,
           caller: publicKey,
           winner,
-          treasury: new PublicKey(epochState.treasury),
+          treasury: treasuryKey,
           burnAddress: BURN_ADDRESS,
         })
         .instruction();
@@ -161,7 +193,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       </button>
 
       {canClose && (
-        <p className="text-[10px] font-mono text-text-dim/60 text-center mt-1.5">
+        <p className="text-[10px] font-mono text-white/70 text-center mt-1.5">
           Pot: {epochState ? formatXnt(epochState.pot) : '0'} XNT · 60% winner · 25% burn · 10% treasury · 5% you
         </p>
       )}

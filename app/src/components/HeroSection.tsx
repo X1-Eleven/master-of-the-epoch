@@ -33,8 +33,8 @@ function getErrorMessage(e: unknown): string {
   return e.message.slice(0, 120);
 }
 
-function ShareButton({ masterDisplay }: { masterDisplay: string }) {
-  const tweet = `${masterDisplay} is the Master of the Epoch! x1mote.xyz #MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
+function ShareButton() {
+  const tweet = `I'm the Master of the Epoch! x1mote.xyz #MasterOfTheEpoch #MOTE #X1Blockchain #XNT`;
   const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`;
 
   return (
@@ -101,9 +101,6 @@ export function HeroSection({
   const masterNickname = epochState && !hasNoMaster
     ? getNickname(epochState.currentMaster)
     : null;
-  const masterDisplay = masterNickname && masterNickname !== 'Anonymous'
-    ? masterNickname
-    : (epochState ? formatAddress(epochState.currentMaster, 6) : '—');
 
   async function handleClaim() {
     if (!connected || !publicKey) { setVisible(true); return; }
@@ -253,7 +250,7 @@ export function HeroSection({
                             textShadow: '0 0 15px rgba(251,191,36,0.35)' }}>
                   {formatAddress(epochState!.currentMaster, 6)}
                 </p>
-                <ShareButton masterDisplay={masterDisplay} />
+                <ShareButton />
               </div>
               {/* Bug 4: stop "Reigning for" timer once epoch is over */}
               <p className="text-xs text-gold-mid/50 font-mono mt-1">
