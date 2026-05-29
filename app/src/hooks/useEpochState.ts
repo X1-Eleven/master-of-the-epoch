@@ -102,6 +102,7 @@ function decodeEpochState(data: Buffer): EpochStateData {
 async function fetchMasterRecords(
   connection: Connection,
   state: EpochStateData,
+  isOver: boolean,
 ): Promise<LeaderboardEntry[]> {
   const program = makeReadProgram(connection);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,7 +117,8 @@ async function fetchMasterRecords(
 
     const stored = (account.totalReignTime as BN).toNumber();
     const isCurrent = owner === state.currentMaster && state.currentMaster !== NULL_PUBLIC_KEY;
-    const ongoing = isCurrent ? Math.max(0, now - state.masterSince) : 0;
+    // Bug 4: freeze ongoing time when epoch is over
+    const ongoing = isCurrent && !isOver ? Math.max(0, now - state.masterSince) : 0;
     const reignTime = stored + ongoing;
     if (reignTime > 0) entries.push({ wallet: owner, reignTime, isCurrent });
   }
@@ -185,7 +187,8 @@ export function useEpochState(): UseEpochStateReturn {
         slotsInEpoch: netEpochInfo.slotsInEpoch,
         currentEpoch: netEpochInfo.epoch,
       });
-      setError('Game not yet initialized — call initialize_epoch to start the first epoch');
+      // Bug 8: don't surface the "not initialized" message as a visible error banner
+      setError(null);
       setIsLoading(false);
       return;
     }
@@ -211,7 +214,7 @@ export function useEpochState(): UseEpochStateReturn {
 
       // Phase 4: fetch real leaderboard from MasterRecord PDAs
       try {
-        const entries = await fetchMasterRecords(connection, state);
+        const entries = await fetchMasterRecords(connection, state, isOver);
         setLeaderboard(entries);
       } catch (lbErr) {
         console.error('[MOTE] leaderboard fetch error:', lbErr);

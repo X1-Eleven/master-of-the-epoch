@@ -28,7 +28,7 @@ const WalletProvider = _WalletProvider as FC<{ children: ReactNode; wallets: any
 function AppContent() {
   const { publicKey, connected } = useWallet();
   const { setNickname } = useNicknames();
-  const { epochState, epochInfo, leaderboard, isLoading, error } = useEpochState();
+  const { epochState, epochInfo, leaderboard, isLoading, error, refresh } = useEpochState();
 
   // Nickname modal state: null = closed, otherwise {address, initial}
   const [nicknameModal, setNicknameModal] = useState<{ address: string; initial: string } | null>(null);
@@ -76,20 +76,17 @@ function AppContent() {
       <Header onEditNickname={openNicknameEdit} />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 pb-16 pt-6 space-y-6">
-        {/* Status banner — three distinct flavours */}
+        {/* Status banner — mock data warning and real errors only (Bug 8: hide "not initialized" banner) */}
         {error && (() => {
-          const isNotInit = error.startsWith('Game not yet initialized');
-          const isMock    = error.startsWith('Using mock data');
+          const isMock = error.startsWith('Using mock data');
           return (
             <div className={`flex items-center gap-2 text-xs font-mono rounded px-3 py-1.5 border ${
-              isNotInit
-                ? 'text-purple-light/70 bg-purple-glow/5 border-purple-glow/20'
-                : isMock
+              isMock
                 ? 'text-yellow-500/70 bg-yellow-500/5 border-yellow-500/20'
                 : 'text-red-400/70 bg-red-500/5 border-red-500/20'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full inline-block ${
-                isNotInit ? 'bg-purple-light/60' : isMock ? 'bg-yellow-500/60 animate-pulse' : 'bg-red-400/60'
+                isMock ? 'bg-yellow-500/60 animate-pulse' : 'bg-red-400/60'
               }`} />
               {error}
             </div>
@@ -105,6 +102,7 @@ function AppContent() {
           isLoading={isLoading}
           isEpochOver={isEpochOver}
           isClosed={isClosed}
+          onRefresh={refresh}
         />
 
         <LiveStatsBar

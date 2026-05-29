@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
-import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData, EpochInfo } from '../hooks/useEpochState';
@@ -16,6 +16,21 @@ interface HeroSectionProps {
   isLoading: boolean;
   isEpochOver: boolean;
   isClosed: boolean;
+  onRefresh: () => void;
+}
+
+// Bug 3: extract a user-friendly message from any Anchor/wallet error
+function getErrorMessage(e: unknown): string {
+  if (!(e instanceof Error)) return String(e).slice(0, 120);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ae = e as any;
+  if (ae.error?.errorMessage) return ae.error.errorMessage;
+  if (ae.errorMessage) return ae.errorMessage;
+  if (ae.logs?.length) {
+    const line = (ae.logs as string[]).find((l) => l.includes('Error Message:'));
+    if (line) return line.replace(/.*Error Message:\s*/, '');
+  }
+  return e.message.slice(0, 120);
 }
 
 function ShareButton({ masterDisplay }: { masterDisplay: string }) {
@@ -30,7 +45,7 @@ function ShareButton({ masterDisplay }: { masterDisplay: string }) {
       title={`Share as ${masterDisplay}`}
       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-slate-600/40 bg-slate-800/30 text-slate-400 hover:border-slate-400/60 hover:text-slate-200 hover:bg-slate-700/40 transition-all text-[10px] font-mono tracking-wide"
     >
-      Show Who&apos;s Master!
+      Show Them!!
       {/* X / Twitter logo */}
       <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="currentColor">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.261 5.633 5.903-5.633zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
@@ -40,7 +55,7 @@ function ShareButton({ masterDisplay }: { masterDisplay: string }) {
 }
 
 export function HeroSection({
-  epochState, epochInfo, isLoading, isEpochOver, isClosed,
+  epochState, epochInfo, isLoading, isEpochOver, isClosed, onRefresh,
 }: HeroSectionProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
@@ -48,6 +63,10 @@ export function HeroSection({
   const [countdown, setCountdown] = useState<number>(epochInfo?.secondsRemaining ?? 0);
   const [claiming, setClaiming] = useState(false);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [txIsError, setTxIsError] = useState(false);
+
+  // Bug 4: freeze "Reigning for" when epoch is over
+  const frozenReignSecondsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (epochInfo?.secondsRemaining == null) return;
@@ -59,9 +78,25 @@ export function HeroSection({
   const hasNoMaster = !epochState || epochState.currentMaster === NULL_PUBLIC_KEY;
   const isCurrentMaster = connected && publicKey && epochState?.currentMaster === publicKey.toString();
   const gameNotStarted = epochState?.gameEpoch === 0;
-  const reignSeconds = epochState && !hasNoMaster
+
+  // Bug 4: snapshot reign time the moment we detect epoch is over; never let it tick past that
+  const liveReignSeconds = epochState && !hasNoMaster
     ? Math.max(0, Math.floor(Date.now() / 1000) - epochState.masterSince)
     : 0;
+
+  useEffect(() => {
+    if (isEpochOver && !hasNoMaster && liveReignSeconds > 0) {
+      if (frozenReignSecondsRef.current === null) {
+        frozenReignSecondsRef.current = liveReignSeconds;
+      }
+    } else if (!isEpochOver) {
+      frozenReignSecondsRef.current = null;
+    }
+  });
+
+  const reignSeconds = isEpochOver
+    ? (frozenReignSecondsRef.current ?? liveReignSeconds)
+    : liveReignSeconds;
 
   const masterNickname = epochState && !hasNoMaster
     ? getNickname(epochState.currentMaster)
@@ -73,13 +108,25 @@ export function HeroSection({
   async function handleClaim() {
     if (!connected || !publicKey) { setVisible(true); return; }
     if (!signTransaction || !epochState) return;
+    // Bug 2: guard against re-entry while already claiming
+    if (claiming) return;
+
     setClaiming(true);
+    // Bug 3: clear ALL previous messages before each new attempt
     setTxStatus(null);
+    setTxIsError(false);
+
     try {
       const connection = new Connection(RPC_ENDPOINT, 'confirmed');
       const provider = new AnchorProvider(
         connection,
-        { publicKey, signTransaction, signAllTransactions: async (txs: unknown[]) => txs } as never,
+        {
+          publicKey,
+          signTransaction,
+          // Bug 2: properly implement signAllTransactions to avoid silent no-sign on some paths
+          signAllTransactions: async (txs: Transaction[]) =>
+            Promise.all(txs.map((tx) => signTransaction(tx))),
+        } as never,
         { commitment: 'confirmed' }
       );
       const program = new Program(IDL as unknown as Idl, provider);
@@ -97,8 +144,10 @@ export function HeroSection({
             PROGRAM_ID
           )[0];
 
+      // Bug 2: use .instruction() + manual sign/send to avoid relying on Anchor's
+      // internal sendAndConfirm state, which can get stuck after a failed tx
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = await (program.methods as any).claimMaster()
+      const ix = await (program.methods as any).claimMaster()
         .accounts({
           epochState: epochStatePDA,
           claimantRecord: claimantRecordPDA,
@@ -106,13 +155,31 @@ export function HeroSection({
           claimant: publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .rpc();
+        .instruction();
 
-      setTxStatus(`Claimed! tx: ${tx.slice(0, 8)}...`);
+      const tx = new Transaction();
+      tx.add(ix);
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+
+      const signedTx = await signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+
+      setTxStatus(`Claimed! tx: ${sig.slice(0, 8)}...`);
+      setTxIsError(false);
+      // Bug 5: immediately refresh state instead of waiting for the next 5-second poll
+      onRefresh();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setTxStatus(`Error: ${msg.slice(0, 60)}`);
+      // Bug 3: show raw AnchorError text as friendly message
+      setTxStatus(getErrorMessage(e));
+      setTxIsError(true);
     } finally {
+      // Bug 2: always reset claiming so the button is never permanently disabled
       setClaiming(false);
     }
   }
@@ -179,19 +246,20 @@ export function HeroSection({
                   {masterNickname}
                 </p>
               )}
-              {/* Address row + share button */}
-              <div className="flex items-center justify-center gap-2">
+              {/* Address centered on its own line; share button floats independently */}
+              <div className="relative flex items-center justify-center">
                 <p className="font-mono text-base sm:text-xl font-bold tracking-wider animate-flicker"
                    style={{ color: masterNickname !== 'Anonymous' ? 'rgba(251,191,36,0.65)' : '#fbbf24',
                             textShadow: '0 0 15px rgba(251,191,36,0.35)' }}>
                   {formatAddress(epochState!.currentMaster, 6)}
                 </p>
-                <ShareButton
-                  masterDisplay={masterDisplay}
-                />
+                <div className="absolute left-full ml-2">
+                  <ShareButton masterDisplay={masterDisplay} />
+                </div>
               </div>
+              {/* Bug 4: stop "Reigning for" timer once epoch is over */}
               <p className="text-xs text-gold-mid/50 font-mono mt-1">
-                Reigning for {formatDuration(reignSeconds)}
+                {isEpochOver ? 'Final reign:' : 'Reigning for'} {formatDuration(reignSeconds)}
               </p>
             </div>
           )}
@@ -260,6 +328,7 @@ export function HeroSection({
             epochState={epochState}
             isEpochOver={isEpochOver}
             isClosed={isClosed}
+            onRefresh={onRefresh}
           />
 
           {/* Hint text */}
@@ -269,7 +338,7 @@ export function HeroSection({
             </p>
           )}
           {txStatus && (
-            <p className={`text-xs font-mono text-center ${txStatus.startsWith('Error') ? 'text-red-400' : 'text-neon-dim'}`}>
+            <p className={`text-xs font-mono text-center ${txIsError ? 'text-red-400' : 'text-neon-dim'}`}>
               {txStatus}
             </p>
           )}

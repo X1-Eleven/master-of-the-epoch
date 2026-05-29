@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
-import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { Program, AnchorProvider, Idl, BN } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData } from '../hooks/useEpochState';
@@ -15,13 +15,29 @@ interface CloseEpochButtonProps {
   epochState: EpochStateData | null;
   isEpochOver: boolean;
   isClosed: boolean;
+  onRefresh: () => void;
 }
 
-export function CloseEpochButton({ epochState, isEpochOver, isClosed }: CloseEpochButtonProps) {
+// Bug 3: extract a user-friendly message from any Anchor/wallet error
+function getErrorMessage(e: unknown): string {
+  if (!(e instanceof Error)) return String(e).slice(0, 120);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ae = e as any;
+  if (ae.error?.errorMessage) return ae.error.errorMessage;
+  if (ae.errorMessage) return ae.errorMessage;
+  if (ae.logs?.length) {
+    const line = (ae.logs as string[]).find((l) => l.includes('Error Message:'));
+    if (line) return line.replace(/.*Error Message:\s*/, '');
+  }
+  return e.message.slice(0, 120);
+}
+
+export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh }: CloseEpochButtonProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
   const [closing, setClosing] = useState(false);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
 
   const canClose = isEpochOver && !isClosed && !!epochState;
   const callerReward = epochState ? (epochState.pot / LAMPORTS_PER_XNT) * 0.05 : 0;
@@ -29,38 +45,48 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed }: CloseEpo
   async function handleClose() {
     if (!connected || !publicKey) { setVisible(true); return; }
     if (!signTransaction || !epochState) return;
+    if (closing) return;
 
     setClosing(true);
+    // Bug 3: clear ALL previous messages before each attempt
     setTxStatus(null);
+    setIsError(false);
 
-    const connection = new Connection(RPC_ENDPOINT, 'confirmed');
-    const provider = new AnchorProvider(
-      connection,
-      { publicKey, signTransaction, signAllTransactions: async (txs: unknown[]) => txs } as never,
-      { commitment: 'confirmed' }
-    );
-    const program = new Program(IDL as unknown as Idl, provider);
-
-    const [epochStatePDA] = PublicKey.findProgramAddressSync([Buffer.from(EPOCH_STATE_SEED)], PROGRAM_ID);
-    const [currentMasterRecord] = PublicKey.findProgramAddressSync(
-      [Buffer.from(MASTER_RECORD_SEED), new PublicKey(epochState.currentMaster).toBuffer()],
-      PROGRAM_ID
-    );
-
-    // Step 1: close_epoch
-    let closeTx: string;
     try {
+      const connection = new Connection(RPC_ENDPOINT, 'confirmed');
+      const provider = new AnchorProvider(
+        connection,
+        {
+          publicKey,
+          signTransaction,
+          // Bug 2: properly implement signAllTransactions so Anchor never bypasses signing
+          signAllTransactions: async (txs: Transaction[]) =>
+            Promise.all(txs.map((tx) => signTransaction(tx))),
+        } as never,
+        { commitment: 'confirmed' }
+      );
+      const program = new Program(IDL as unknown as Idl, provider);
+
+      const [epochStatePDA] = PublicKey.findProgramAddressSync([Buffer.from(EPOCH_STATE_SEED)], PROGRAM_ID);
+      const [currentMasterRecord] = PublicKey.findProgramAddressSync(
+        [Buffer.from(MASTER_RECORD_SEED), new PublicKey(epochState.currentMaster).toBuffer()],
+        PROGRAM_ID
+      );
+      const [gameCounterPDA] = PublicKey.findProgramAddressSync([Buffer.from(GAME_COUNTER_SEED)], PROGRAM_ID);
+
+      // Determine winner (same logic as the on-chain handler)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const masterRecordData = await (program.account as any).masterRecord.fetch(currentMasterRecord);
       const now = Math.floor(Date.now() / 1000);
       const currentTotal = (masterRecordData.totalReignTime as BN).toNumber() + (now - epochState.masterSince);
       const winner =
-        currentTotal > epochState.leadingMasterTime
+        currentTotal >= epochState.leadingMasterTime
           ? new PublicKey(epochState.currentMaster)
           : new PublicKey(epochState.leadingMaster);
 
+      // Bug 1: build both instructions and combine into one atomic transaction
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      closeTx = await (program.methods as any).closeEpoch()
+      const closeIx = await (program.methods as any).closeEpoch()
         .accounts({
           epochState: epochStatePDA,
           currentMasterRecord,
@@ -69,32 +95,43 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed }: CloseEpo
           treasury: new PublicKey(epochState.treasury),
           burnAddress: BURN_ADDRESS,
         })
-        .rpc();
-    } catch {
-      setTxStatus('Epoch ending, please wait a moment and try again');
-      setClosing(false);
-      return;
-    }
+        .instruction();
 
-    // Step 2: initialize_epoch for the next game
-    setTxStatus('Epoch closed! Starting next epoch...');
-    const [gameCounterPDA] = PublicKey.findProgramAddressSync([Buffer.from(GAME_COUNTER_SEED)], PROGRAM_ID);
-    try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const initTx = await (program.methods as any).initializeEpoch()
+      const initIx = await (program.methods as any).initializeEpoch()
         .accounts({
           epochState: epochStatePDA,
           gameCounter: gameCounterPDA,
           payer: publicKey,
           systemProgram: SystemProgram.programId,
         })
-        .rpc();
-      setTxStatus(`New epoch started! tx: ${initTx.slice(0, 8)}...`);
-    } catch {
-      setTxStatus(`Epoch closed (tx: ${closeTx.slice(0, 8)}...) — new epoch init failed, please retry`);
-    }
+        .instruction();
 
-    setClosing(false);
+      const tx = new Transaction();
+      tx.add(closeIx, initIx);
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+
+      // Sign once — user sees a single wallet popup
+      const signedTx = await signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+
+      setTxStatus(`Epoch closed & new game started! tx: ${sig.slice(0, 8)}...`);
+      setIsError(false);
+      // Bug 5: immediately refresh state after successful transaction
+      onRefresh();
+    } catch (e: unknown) {
+      // Bug 3: show raw AnchorError text as a friendly message
+      setTxStatus(getErrorMessage(e));
+      setIsError(true);
+    } finally {
+      setClosing(false);
+    }
   }
 
   return (
@@ -111,7 +148,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed }: CloseEpo
         {closing ? (
           <span className="flex items-center justify-center gap-2">
             <span className="w-4 h-4 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin inline-block" />
-            {txStatus ?? 'Closing Epoch...'}
+            Closing & Restarting Epoch...
           </span>
         ) : isClosed ? (
           '✓ Epoch Already Closed'
@@ -129,11 +166,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed }: CloseEpo
       )}
 
       {txStatus && !closing && (
-        <p className={`text-xs font-mono text-center mt-2 ${
-          txStatus.startsWith('Epoch ending') || txStatus.includes('failed')
-            ? 'text-red-400'
-            : 'text-neon-dim'
-        }`}>
+        <p className={`text-xs font-mono text-center mt-2 ${isError ? 'text-red-400' : 'text-neon-dim'}`}>
           {txStatus}
         </p>
       )}
