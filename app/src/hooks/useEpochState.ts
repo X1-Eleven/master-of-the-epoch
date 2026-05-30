@@ -102,6 +102,7 @@ function decodeEpochState(data: Buffer): EpochStateData {
 async function fetchMasterRecords(
   connection: Connection,
   state: EpochStateData,
+  isOver: boolean,
 ): Promise<LeaderboardEntry[]> {
   const program = makeReadProgram(connection);
 
@@ -120,9 +121,10 @@ async function fetchMasterRecords(
     const owner = (account.owner as PublicKey).toString();
     const stored = (account.totalReignTime as BN).toNumber();
     const isCurrent = owner === state.currentMaster && state.currentMaster !== NULL_PUBLIC_KEY;
-    // Include ongoing reign for the current master regardless of isOver; the time is capped
-    // naturally once close_epoch updates the stored value and currentMaster changes.
-    const ongoing = isCurrent ? Math.max(0, now - state.masterSince) : 0;
+    // When the epoch is over, freeze all times at their stored on-chain values only.
+    // The current master's final reign will be committed by close_epoch; until then
+    // we show the already-committed totals so no entry keeps ticking.
+    const ongoing = isCurrent && !isOver ? Math.max(0, now - state.masterSince) : 0;
     const reignTime = stored + ongoing;
     if (reignTime > 0) entries.push({ wallet: owner, reignTime, isCurrent });
   }
@@ -218,7 +220,7 @@ export function useEpochState(): UseEpochStateReturn {
 
       // Phase 4: fetch real leaderboard from MasterRecord PDAs
       try {
-        const entries = await fetchMasterRecords(connection, state);
+        const entries = await fetchMasterRecords(connection, state, isOver);
         setLeaderboard(entries);
       } catch (lbErr) {
         console.error('[MOTE] leaderboard fetch error:', lbErr);

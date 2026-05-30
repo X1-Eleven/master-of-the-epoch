@@ -30,7 +30,7 @@ const MECHANICS = [
   {
     icon: '🔥',
     title: 'Prize Split',
-    body: '60% to the winner · 25% permanently burned · 10% to treasury · 5% to caller.',
+    body: '70% to the winner · 15% permanently burned · 10% to treasury · 5% to caller.',
   },
 ];
 
@@ -53,15 +53,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Where do the funds go exactly?',
-    a: '60% → winner (most cumulative time as Master) · 25% → burned to incinerator · 10% → treasury · 5% → whoever closes the epoch.',
+    a: '70% → winner (most cumulative time as Master) · 15% → burned to incinerator · 10% → treasury · 5% → whoever closes the epoch.',
   },
   {
     q: 'What is XNT burn and why does it matter?',
-    a: "25% of every pot is sent to Solana's incinerator address — a black-hole wallet from which XNT can never be recovered. It permanently reduces circulating supply.",
-  },
-  {
-    q: 'Can the rules ever be changed?',
-    a: 'No. The contract is immutable once deployed. There is no admin key, no upgrade authority, and no backdoor. The code is law.',
+    a: "15% of every pot is sent to Solana's incinerator address — a black-hole wallet from which XNT can never be recovered. It permanently reduces circulating supply.",
   },
   {
     q: 'What stops someone from spamming claims?',

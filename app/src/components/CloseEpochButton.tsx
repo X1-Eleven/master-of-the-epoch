@@ -311,7 +311,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh,
 
       {canClose && !needsInit && (
         <p className="text-[10px] font-mono text-white/70 text-center mt-1.5">
-          Pot: {epochState ? formatXnt(epochState.pot) : '0'} XNT · 60% winner · 25% burn · 10% treasury · 5% you
+          Pot: {epochState ? formatXnt(epochState.pot) : '0'} XNT · 70% winner · 15% burn · 10% treasury · 5% you
         </p>
       )}
 

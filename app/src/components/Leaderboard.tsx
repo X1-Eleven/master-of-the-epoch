@@ -1,10 +1,13 @@
-import { LeaderboardEntry } from '../hooks/useEpochState';
+import { LeaderboardEntry, EpochStateData } from '../hooks/useEpochState';
 import { formatAddress, formatReignTime } from '../utils/format';
 import { useNicknames } from '../context/NicknameContext';
+import { NULL_PUBLIC_KEY } from '../constants';
 
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
   isLoading: boolean;
+  epochState: EpochStateData | null;
+  isEpochOver: boolean;
 }
 
 const RANK_COLORS = ['#fbbf24', '#94a3b8', '#c2956c', '#7c3aed', '#7c3aed'];
@@ -25,9 +28,18 @@ function ReignBar({ percent }: { percent: number }) {
   );
 }
 
-export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
+export function Leaderboard({ entries, isLoading, epochState, isEpochOver }: LeaderboardProps) {
   const { getNickname } = useNicknames();
   const totalTime = entries.reduce((sum, e) => sum + e.reignTime, 0) || 1;
+
+  // When the epoch is over, the MASTER badge belongs to the leading master (winner by
+  // accumulated reign time).  During live play it belongs to the current master.
+  // Fall back to currentMaster if leadingMaster is still the null pubkey (single-player game).
+  const masterBadgeWallet = isEpochOver && epochState
+    ? (epochState.leadingMaster !== NULL_PUBLIC_KEY
+        ? epochState.leadingMaster
+        : epochState.currentMaster)
+    : null; // null → use entry.isCurrent (live play)
 
   return (
     <section className="rounded-lg border border-border-dim bg-bg-card overflow-hidden">
@@ -74,10 +86,14 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
             const rankColor = RANK_COLORS[idx] ?? '#7c3aed';
             const nickname = getNickname(entry.wallet);
             const isAnon = nickname === 'Anonymous';
+            // Which wallet gets the MASTER badge + row highlight this render
+            const showMaster = masterBadgeWallet !== null
+              ? entry.wallet === masterBadgeWallet
+              : entry.isCurrent;
             return (
               <div
                 key={entry.wallet}
-                className={`px-6 py-3 grid grid-cols-12 gap-2 items-center transition-colors hover:bg-bg-card-hover ${entry.isCurrent ? 'bg-gold-bright/[0.03]' : ''}`}
+                className={`px-6 py-3 grid grid-cols-12 gap-2 items-center transition-colors hover:bg-bg-card-hover ${showMaster ? 'bg-gold-bright/[0.03]' : ''}`}
               >
                 {/* Rank */}
                 <span
@@ -103,12 +119,12 @@ export function Leaderboard({ entries, isLoading }: LeaderboardProps) {
                   <span className="font-mono text-xs text-slate-400 tracking-wider truncate">
                     {formatAddress(entry.wallet, 4)}
                   </span>
-                  {entry.isCurrent && (
+                  {showMaster && (
                     <span
                       className="text-[9px] font-orbitron px-1.5 py-0.5 rounded border tracking-wider shrink-0"
                       style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.05)' }}
                     >
-                      MASTER
+                      M
                     </span>
                   )}
                 </div>

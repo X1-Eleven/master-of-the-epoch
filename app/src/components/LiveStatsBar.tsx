@@ -91,7 +91,7 @@ function BurnCard({ epochBurnXnt, historicalBurnXnt }: BurnCardProps) {
 }
 
 export function LiveStatsBar({ pot, claimCost, claimsCount, historicalBurnXnt, isLoading }: LiveStatsBarProps) {
-  const estimatedBurnXnt = (pot / LAMPORTS_PER_XNT) * 0.25;
+  const estimatedBurnXnt = (pot / LAMPORTS_PER_XNT) * 0.15;
 
   if (isLoading) {
     return (

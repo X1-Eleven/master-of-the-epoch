@@ -68,7 +68,7 @@ function AppContent() {
   const isEpochOver = epochInfo?.isOver ?? false;
   const isClosed = epochState?.closed ?? false;
   const historicalBurnXnt = epochState && epochState.gameId > 1
-    ? (epochState.gameId - 1) * ((epochState.pot / LAMPORTS_PER_XNT) * 0.25)
+    ? (epochState.gameId - 1) * ((epochState.pot / LAMPORTS_PER_XNT) * 0.15)
     : 0;
 
   return (
@@ -113,7 +113,7 @@ function AppContent() {
           isLoading={isLoading}
         />
 
-        <Leaderboard entries={leaderboard} isLoading={isLoading} />
+        <Leaderboard entries={leaderboard} isLoading={isLoading} epochState={epochState} isEpochOver={isEpochOver} />
 
         <HallOfMasters />
       </main>

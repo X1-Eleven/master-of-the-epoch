@@ -22,8 +22,8 @@ pub const CLAIM_COST_STEP: u64 = 2 * XNT_PER_LAMPORT;
 pub const CLAIM_COOLDOWN: i64 = 60;
 
 // Payout basis points (out of 10_000)
-pub const WINNER_BPS: u64 = 6_000;   // 60%
-pub const BURN_BPS: u64 = 2_500;     // 25%
+pub const WINNER_BPS: u64 = 7_000;   // 70%
+pub const BURN_BPS: u64 = 1_500;     // 15%
 pub const TREASURY_BPS: u64 = 1_000; // 10%
 pub const CALLER_BPS: u64 = 500;     // 5%
 
