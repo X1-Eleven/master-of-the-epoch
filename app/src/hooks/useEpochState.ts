@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { BorshAccountsCoder, BN, Program, AnchorProvider, Idl, utils as anchorUtils } from '@coral-xyz/anchor';
+import { BorshAccountsCoder, BN, Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import {
   PROGRAM_ID,
@@ -106,18 +106,17 @@ async function fetchMasterRecords(
 ): Promise<LeaderboardEntry[]> {
   const program = makeReadProgram(connection);
 
-  // Use memcmp filter on game_id (offset 57: 8 discriminator + 32 owner + 8 lastClaim + 8 totalReignTime + 1 bump)
-  // so the RPC returns only records for the current game rather than all games.
-  const gameIdBytes = new BN(state.gameId).toArrayLike(Buffer, 'le', 8);
+  // Fetch all MasterRecord accounts and filter client-side to avoid byte-offset
+  // errors in the memcmp filter that caused records to be silently dropped.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allRecords: any[] = await (program.account as any).masterRecord.all([
-    { memcmp: { offset: 57, bytes: anchorUtils.bytes.bs58.encode(gameIdBytes) } },
-  ]);
+  const allRecords: any[] = await (program.account as any).masterRecord.all();
+  const currentGameId = state.gameId;
 
   const now = Math.floor(Date.now() / 1000);
   const entries: LeaderboardEntry[] = [];
 
   for (const { account } of allRecords) {
+    if ((account.gameId as BN).toNumber() !== currentGameId) continue;
     const owner = (account.owner as PublicKey).toString();
     const stored = (account.totalReignTime as BN).toNumber();
     const isCurrent = owner === state.currentMaster && state.currentMaster !== NULL_PUBLIC_KEY;
