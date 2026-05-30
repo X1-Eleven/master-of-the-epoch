@@ -16,6 +16,7 @@ interface CloseEpochButtonProps {
   isEpochOver: boolean;
   isClosed: boolean;
   onRefresh: () => void;
+  onMessage: (msg: string | null, isError: boolean) => void;
 }
 
 const INIT_MAX_TRIES = 3;
@@ -39,14 +40,12 @@ function getErrorMessage(e: unknown): string {
   return e.message.slice(0, 200);
 }
 
-export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh }: CloseEpochButtonProps) {
+export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh, onMessage }: CloseEpochButtonProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
   const [phase, setPhase] = useState<'idle' | 'closing' | 'initializing'>('idle');
   // 1-based attempt counter shown in the button label during auto-retry; 0 = not retrying
   const [retryAttempt, setRetryAttempt] = useState(0);
-  const [txStatus, setTxStatus] = useState<string | null>(null);
-  const [isError, setIsError] = useState(false);
   // true when close_epoch confirmed but all initialize_epoch attempts failed
   const [needsInit, setNeedsInit] = useState(false);
 
@@ -126,8 +125,8 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
     if (!signTransaction || !epochState) return;
     if (busy) return;
 
-    setTxStatus(null);
-    setIsError(false);
+    // Clear any existing message (from claim_master or a prior close attempt)
+    onMessage(null, false);
     setRetryAttempt(0);
 
     const [connection, program] = makeConnection();
@@ -140,12 +139,10 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       try {
         const sig = await sendInitWithRetry(connection, program, epochStatePDA, gameCounterPDA);
         setNeedsInit(false);
-        setTxStatus(`New epoch started! tx: ${sig.slice(0, 8)}...`);
-        setIsError(false);
+        onMessage(`New epoch started! tx: ${sig.slice(0, 8)}...`, false);
         onRefresh();
       } catch (e: unknown) {
-        setIsError(true);
-        setTxStatus(`Failed to start new epoch — ${getErrorMessage(e)}`);
+        onMessage(`Failed to start new epoch — ${getErrorMessage(e)}`, true);
       } finally {
         setPhase('idle');
         setRetryAttempt(0);
@@ -159,13 +156,11 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       PROGRAM_ID
     );
 
-    // Bug 2: set phase immediately (same React batch as message clearing above) so no
-    // old status message can ever be visible while a new attempt is in flight.
     setPhase('closing');
 
     let closeSig: string;
     try {
-      // Bug 4: mirror the contract's winner logic exactly.
+      // Mirror the contract's winner logic exactly.
       // The contract uses clock.epoch_start_timestamp (start of current network epoch) as
       // the reign cap — NOT the current wall-clock time.  Fetch it from the RPC so our
       // comparison matches what the on-chain handler will compute.
@@ -221,8 +216,7 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       closeSig = await sendAndConfirm(connection, tx);
     } catch (e: unknown) {
       setPhase('idle');
-      setIsError(true);
-      setTxStatus(`Step 1 failed — ${getErrorMessage(e)}`);
+      onMessage(`Step 1 failed — ${getErrorMessage(e)}`, true);
       return;
     }
 
@@ -233,15 +227,14 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
     try {
       const initSig = await sendInitWithRetry(connection, program, epochStatePDA, gameCounterPDA);
       setNeedsInit(false);
-      setTxStatus(`Epoch closed & new game started! tx: ${initSig.slice(0, 8)}...`);
-      setIsError(false);
+      onMessage(`Epoch closed & new game started! tx: ${initSig.slice(0, 8)}...`, false);
       onRefresh();
     } catch (e: unknown) {
       // close_epoch landed; user can retry step 2 via the main button or emergency button
       setNeedsInit(true);
-      setIsError(true);
-      setTxStatus(
-        `Epoch closed (tx: ${closeSig.slice(0, 8)}...) but failed to start new epoch after ${INIT_MAX_TRIES} attempts.`
+      onMessage(
+        `Epoch closed (tx: ${closeSig.slice(0, 8)}...) but failed to start new epoch after ${INIT_MAX_TRIES} attempts.`,
+        true,
       );
     } finally {
       setPhase('idle');
@@ -254,8 +247,8 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
     if (!signTransaction) return;
     if (busy) return;
 
-    setTxStatus(null);
-    setIsError(false);
+    // Clear any existing message before starting
+    onMessage(null, false);
     setRetryAttempt(0);
 
     const [connection, program] = makeConnection();
@@ -266,12 +259,10 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
     try {
       const sig = await sendInitWithRetry(connection, program, epochStatePDA, gameCounterPDA);
       setNeedsInit(false);
-      setTxStatus(`New epoch started! tx: ${sig.slice(0, 8)}...`);
-      setIsError(false);
+      onMessage(`New epoch started! tx: ${sig.slice(0, 8)}...`, false);
       onRefresh();
     } catch (e: unknown) {
-      setIsError(true);
-      setTxStatus(`Failed to start new epoch — ${getErrorMessage(e)}`);
+      onMessage(`Failed to start new epoch — ${getErrorMessage(e)}`, true);
     } finally {
       setPhase('idle');
       setRetryAttempt(0);
@@ -321,12 +312,6 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       {canClose && !needsInit && (
         <p className="text-[10px] font-mono text-white/70 text-center mt-1.5">
           Pot: {epochState ? formatXnt(epochState.pot) : '0'} XNT · 60% winner · 25% burn · 10% treasury · 5% you
-        </p>
-      )}
-
-      {txStatus && !busy && (
-        <p className={`text-xs font-mono text-center mt-2 ${isError ? 'text-red-400' : 'text-neon-dim'}`}>
-          {txStatus}
         </p>
       )}
 

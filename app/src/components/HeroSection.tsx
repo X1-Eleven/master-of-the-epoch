@@ -296,7 +296,7 @@ export function HeroSection({
               </p>
             )}
             {epochInfo && !isEpochOver && (
-              <p className="text-[9px] font-mono text-text-dim mt-1">
+              <p className="text-[9px] font-mono text-white/60 mt-1">
                 Epoch #{epochInfo.currentEpoch} · {Math.round((epochInfo.slotIndex / epochInfo.slotsInEpoch) * 100)}% complete
               </p>
             )}
@@ -343,6 +343,7 @@ export function HeroSection({
             isEpochOver={isEpochOver}
             isClosed={isClosed}
             onRefresh={onRefresh}
+            onMessage={(msg, isErr) => { setTxStatus(msg); setTxIsError(isErr); }}
           />
 
           {/* Hint text */}

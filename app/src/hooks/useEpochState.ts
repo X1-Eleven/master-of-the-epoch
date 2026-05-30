@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { BorshAccountsCoder, BN, Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
+import { BorshAccountsCoder, BN, Program, AnchorProvider, Idl, utils as anchorUtils } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import {
   PROGRAM_ID,
@@ -102,23 +102,27 @@ function decodeEpochState(data: Buffer): EpochStateData {
 async function fetchMasterRecords(
   connection: Connection,
   state: EpochStateData,
-  isOver: boolean,
 ): Promise<LeaderboardEntry[]> {
   const program = makeReadProgram(connection);
+
+  // Use memcmp filter on game_id (offset 57: 8 discriminator + 32 owner + 8 lastClaim + 8 totalReignTime + 1 bump)
+  // so the RPC returns only records for the current game rather than all games.
+  const gameIdBytes = new BN(state.gameId).toArrayLike(Buffer, 'le', 8);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allRecords: any[] = await (program.account as any).masterRecord.all();
+  const allRecords: any[] = await (program.account as any).masterRecord.all([
+    { memcmp: { offset: 57, bytes: anchorUtils.bytes.bs58.encode(gameIdBytes) } },
+  ]);
+
   const now = Math.floor(Date.now() / 1000);
   const entries: LeaderboardEntry[] = [];
 
   for (const { account } of allRecords) {
     const owner = (account.owner as PublicKey).toString();
-    const recordGameId = (account.gameId as BN).toNumber();
-    if (recordGameId !== state.gameId) continue;
-
     const stored = (account.totalReignTime as BN).toNumber();
     const isCurrent = owner === state.currentMaster && state.currentMaster !== NULL_PUBLIC_KEY;
-    // Bug 4: freeze ongoing time when epoch is over
-    const ongoing = isCurrent && !isOver ? Math.max(0, now - state.masterSince) : 0;
+    // Include ongoing reign for the current master regardless of isOver; the time is capped
+    // naturally once close_epoch updates the stored value and currentMaster changes.
+    const ongoing = isCurrent ? Math.max(0, now - state.masterSince) : 0;
     const reignTime = stored + ongoing;
     if (reignTime > 0) entries.push({ wallet: owner, reignTime, isCurrent });
   }
@@ -214,7 +218,7 @@ export function useEpochState(): UseEpochStateReturn {
 
       // Phase 4: fetch real leaderboard from MasterRecord PDAs
       try {
-        const entries = await fetchMasterRecords(connection, state, isOver);
+        const entries = await fetchMasterRecords(connection, state);
         setLeaderboard(entries);
       } catch (lbErr) {
         console.error('[MOTE] leaderboard fetch error:', lbErr);
