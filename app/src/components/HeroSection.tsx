@@ -79,6 +79,13 @@ export function HeroSection({
   const isCurrentMaster = connected && publicKey && epochState?.currentMaster === publicKey.toString();
   const gameNotStarted = epochState?.gameEpoch === 0;
 
+  // Bug 3: when epoch is over, display the leading master (winner); fall back to currentMaster
+  const displayedMaster = !hasNoMaster
+    ? (isEpochOver && epochState!.leadingMaster !== NULL_PUBLIC_KEY
+        ? epochState!.leadingMaster
+        : epochState!.currentMaster)
+    : NULL_PUBLIC_KEY;
+
   // Bug 4: snapshot reign time the moment we detect epoch is over; never let it tick past that
   const liveReignSeconds = epochState && !hasNoMaster
     ? Math.max(0, Math.floor(Date.now() / 1000) - epochState.masterSince)
@@ -98,8 +105,9 @@ export function HeroSection({
     ? (frozenReignSecondsRef.current ?? liveReignSeconds)
     : liveReignSeconds;
 
-  const masterNickname = epochState && !hasNoMaster
-    ? getNickname(epochState.currentMaster)
+  // Bug 3: look up nickname for the displayed master (winner when epoch over)
+  const masterNickname = !hasNoMaster
+    ? getNickname(displayedMaster)
     : null;
 
   async function handleClaim() {
@@ -115,6 +123,17 @@ export function HeroSection({
 
     try {
       const connection = new Connection(RPC_ENDPOINT, 'confirmed');
+
+      // Bug 1: check balance before sending — avoids a failed tx and confusing error
+      const balance = await connection.getBalance(publicKey);
+      if (balance < epochState.nextClaimCost) {
+        const needed = (epochState.nextClaimCost / 1_000_000_000).toFixed(2);
+        setTxIsError(true);
+        setTxStatus(`Insufficient balance — you need ${needed} XNT to become Master`);
+        setClaiming(false);
+        return;
+      }
+
       const provider = new AnchorProvider(
         connection,
         {
@@ -248,7 +267,7 @@ export function HeroSection({
                 <p className="font-mono text-base sm:text-xl font-bold tracking-wider animate-flicker"
                    style={{ color: masterNickname !== 'Anonymous' ? 'rgba(251,191,36,0.65)' : '#fbbf24',
                             textShadow: '0 0 15px rgba(251,191,36,0.35)' }}>
-                  {formatAddress(epochState!.currentMaster, 6)}
+                  {formatAddress(displayedMaster, 6)}
                 </p>
                 <ShareButton />
               </div>

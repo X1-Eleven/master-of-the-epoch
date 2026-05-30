@@ -159,15 +159,36 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
       PROGRAM_ID
     );
 
+    // Bug 2: set phase immediately (same React batch as message clearing above) so no
+    // old status message can ever be visible while a new attempt is in flight.
+    setPhase('closing');
+
     let closeSig: string;
     try {
+      // Bug 4: mirror the contract's winner logic exactly.
+      // The contract uses clock.epoch_start_timestamp (start of current network epoch) as
+      // the reign cap — NOT the current wall-clock time.  Fetch it from the RPC so our
+      // comparison matches what the on-chain handler will compute.
+      const netEpochInfo = await connection.getEpochInfo();
+      const epochStartSlot = netEpochInfo.absoluteSlot - netEpochInfo.slotIndex;
+      let epochStartTs = await connection.getBlockTime(epochStartSlot);
+      if (epochStartTs === null) {
+        // Fallback: estimate from slot index (400 ms avg slot time on X1)
+        epochStartTs = Math.floor(Date.now() / 1000) - Math.floor(netEpochInfo.slotIndex * 400 / 1000);
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const masterRecordData = await (program.account as any).masterRecord.fetch(currentMasterRecord);
-      const now = Math.floor(Date.now() / 1000);
       const storedReignTime = (masterRecordData.totalReignTime as BN).toNumber();
-      const currentTotal = storedReignTime + (now - epochState.masterSince);
+
+      // Contract: final_reign = max(epoch_start_ts, master_since) - master_since
+      const reignEnd = Math.max(epochStartTs, epochState.masterSince);
+      const finalReign = Math.max(0, reignEnd - epochState.masterSince);
+      const finalMasterTotal = storedReignTime + finalReign;
+
+      // Use epochState.leadingMasterTime and epochState.leadingMaster directly from on-chain state
       const winner =
-        currentTotal >= epochState.leadingMasterTime
+        finalMasterTotal >= epochState.leadingMasterTime
           ? new PublicKey(epochState.currentMaster)
           : new PublicKey(epochState.leadingMaster);
       const treasuryKey = new PublicKey(epochState.treasury);
@@ -179,9 +200,10 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh 
         winner: winner.toString(),
         treasury: treasuryKey.toString(),
         burnAddress: BURN_ADDRESS.toString(),
+        finalMasterTotal,
+        leadingMasterTime: epochState.leadingMasterTime,
+        epochStartTs,
       });
-
-      setPhase('closing');
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const closeIx = await (program.methods as any).closeEpoch()

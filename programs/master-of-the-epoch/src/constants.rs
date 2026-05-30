@@ -12,11 +12,11 @@ pub const GAME_COUNTER_SEED: &[u8] = b"game_counter";
 /// 1 XNT expressed in lamports (X1 uses 9-decimal lamports like Solana)
 pub const XNT_PER_LAMPORT: u64 = 1_000_000_000;
 
-/// Initial claim cost: 5 XNT
-pub const INITIAL_CLAIM_COST: u64 = 5 * XNT_PER_LAMPORT;
+/// Initial claim cost: 2 XNT
+pub const INITIAL_CLAIM_COST: u64 = 2 * XNT_PER_LAMPORT;
 
-/// Each takeover increases cost by 5 XNT
-pub const CLAIM_COST_STEP: u64 = 5 * XNT_PER_LAMPORT;
+/// Each takeover increases cost by 2 XNT
+pub const CLAIM_COST_STEP: u64 = 2 * XNT_PER_LAMPORT;
 
 /// Cooldown between claims from the same wallet: 60 seconds
 pub const CLAIM_COOLDOWN: i64 = 60;

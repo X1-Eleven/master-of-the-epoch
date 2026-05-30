@@ -116,7 +116,7 @@ export function LiveStatsBar({ pot, claimCost, claimsCount, historicalBurnXnt, i
         <StatCard
           label="Next Master Cost"
           value={`${claimCost.toFixed(0)} XNT`}
-          sub="+5 XNT per takeover"
+          sub="+2 XNT per takeover"
           color="purple"
         />
         <StatCard

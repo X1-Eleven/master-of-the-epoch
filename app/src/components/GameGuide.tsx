@@ -5,7 +5,7 @@ const MECHANICS = [
   {
     icon: '⚔',
     title: 'Claim the Master',
-    body: `Pay ${BASE_CLAIM_COST_XNT} XNT to become Master. Each new takeover raises the cost by 5 XNT.`,
+    body: `Pay ${BASE_CLAIM_COST_XNT} XNT to become Master. Each new takeover raises the cost by 2 XNT.`,
   },
   {
     icon: '⏱',
@@ -15,7 +15,7 @@ const MECHANICS = [
   {
     icon: '📈',
     title: 'Escalating Cost',
-    body: 'Claim 1: 5 XNT · Claim 2: 10 XNT · Claim 3: 15 XNT … 60s cooldown between claims per wallet.',
+    body: 'Claim 1: 2 XNT · Claim 2: 4 XNT · Claim 3: 6 XNT … 60s cooldown between claims per wallet.',
   },
   {
     icon: '⏰',
@@ -65,7 +65,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'What stops someone from spamming claims?',
-    a: 'Cost. Starting at 5 XNT and rising by 5 XNT per takeover, spam becomes exponentially expensive. By claim #10 it costs 55 XNT; by #20 it\'s 105 XNT.',
+    a: 'Cost. Starting at 2 XNT and rising by 2 XNT per takeover, spam becomes exponentially expensive. By claim #10 it costs 22 XNT; by #20 it\'s 42 XNT.',
   },
   {
     q: 'How is the winner determined — is it the last one to claim?',

@@ -11,7 +11,7 @@ export const MASTER_RECORD_SEED = 'master_record';
 export const GAME_COUNTER_SEED = 'game_counter';
 
 export const LAMPORTS_PER_XNT = 1_000_000_000;
-export const BASE_CLAIM_COST_XNT = 5;
+export const BASE_CLAIM_COST_XNT = 2;
 export const COOLDOWN_SECONDS = 60;
 
 // X1 testnet slot time ≈ 400ms
