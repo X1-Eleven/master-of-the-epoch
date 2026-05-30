@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '../context/WalletModalContext';
 import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { Program, AnchorProvider, Idl } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, Idl, BN } from '@coral-xyz/anchor';
 import { IDL } from '../idl';
 import { EpochStateData } from '../hooks/useEpochState';
 import { formatXnt } from '../utils/format';
@@ -160,16 +160,35 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh,
 
     let closeSig: string;
     try {
-      // The on-chain leadingMaster field always holds the wallet with the most
-      // accumulated reign time among all past masters.  close_epoch finalises the
-      // current master's reign and compares it against leadingMasterTime on-chain;
-      // the contract determines the true winner itself.  We must pass leadingMaster
-      // as the winner account when it is set, otherwise fall back to currentMaster
-      // (single-player game where leadingMaster is still the null pubkey).
-      const NULL_KEY = '11111111111111111111111111111111';
-      const winner = epochState.leadingMaster !== NULL_KEY
-        ? new PublicKey(epochState.leadingMaster)
-        : new PublicKey(epochState.currentMaster);
+      // Mirror the contract's winner logic exactly (close_epoch.rs):
+      //   reign_end         = max(epoch_start_timestamp, master_since)
+      //   final_reign       = reign_end - master_since  (≥ 0)
+      //   final_master_total = stored_reign_time + final_reign
+      //   winner = final_master_total >= leading_master_time ? current_master : leading_master
+
+      // 1. Fetch epoch_start_timestamp for the current network epoch
+      const netEpochInfo = await connection.getEpochInfo();
+      const epochStartSlot = netEpochInfo.absoluteSlot - netEpochInfo.slotIndex;
+      let epochStartTs = await connection.getBlockTime(epochStartSlot);
+      if (epochStartTs === null) {
+        // Fallback: estimate from slot index (400 ms avg slot time on X1)
+        epochStartTs = Math.floor(Date.now() / 1000) - Math.floor(netEpochInfo.slotIndex * 400 / 1000);
+      }
+
+      // 2. Fetch current master's stored total_reign_time from their MasterRecord PDA
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const masterRecordData = await (program.account as any).masterRecord.fetch(currentMasterRecord);
+      const storedReignTime = (masterRecordData.totalReignTime as BN).toNumber();
+
+      // 3. Compute final_reign capped at epoch boundary
+      const reignEnd = Math.max(epochStartTs, epochState.masterSince);
+      const finalReign = Math.max(0, reignEnd - epochState.masterSince);
+      const finalMasterTotal = storedReignTime + finalReign;
+
+      // 4. Pick winner using the same comparison the contract uses
+      const winner = finalMasterTotal >= epochState.leadingMasterTime
+        ? new PublicKey(epochState.currentMaster)
+        : new PublicKey(epochState.leadingMaster);
       const treasuryKey = new PublicKey(epochState.treasury);
 
       console.log('[MOTE] closeEpoch accounts:', {
@@ -179,8 +198,11 @@ export function CloseEpochButton({ epochState, isEpochOver, isClosed, onRefresh,
         winner: winner.toString(),
         treasury: treasuryKey.toString(),
         burnAddress: BURN_ADDRESS.toString(),
-        leadingMaster: epochState.leadingMaster,
+        storedReignTime,
+        finalReign,
+        finalMasterTotal,
         leadingMasterTime: epochState.leadingMasterTime,
+        epochStartTs,
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

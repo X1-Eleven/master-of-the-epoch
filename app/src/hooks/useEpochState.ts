@@ -110,13 +110,13 @@ async function fetchMasterRecords(
   // errors in the memcmp filter that caused records to be silently dropped.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allRecords: any[] = await (program.account as any).masterRecord.all();
-  const currentGameId = state.gameId;
 
   const now = Math.floor(Date.now() / 1000);
   const entries: LeaderboardEntry[] = [];
 
   for (const { account } of allRecords) {
-    if ((account.gameId as BN).toNumber() !== currentGameId) continue;
+    console.log('[MOTE] record gameId:', account.gameId.toString(), 'current:', state.gameId.toString(), 'match:', account.gameId.toString() === state.gameId.toString());
+    if (account.gameId.toString() !== state.gameId.toString()) continue;
     const owner = (account.owner as PublicKey).toString();
     const stored = (account.totalReignTime as BN).toNumber();
     const isCurrent = owner === state.currentMaster && state.currentMaster !== NULL_PUBLIC_KEY;
