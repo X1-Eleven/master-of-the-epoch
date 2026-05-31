@@ -103,6 +103,7 @@ async function fetchMasterRecords(
   connection: Connection,
   state: EpochStateData,
   isOver: boolean,
+  epochEndTime: number | null,
 ): Promise<LeaderboardEntry[]> {
   const program = makeReadProgram(connection);
 
@@ -113,6 +114,7 @@ async function fetchMasterRecords(
 
   const now = Math.floor(Date.now() / 1000);
   const entries: LeaderboardEntry[] = [];
+  let currentMasterFound = false;
 
   for (const { account } of allRecords) {
     console.log('[MOTE] record gameId:', account.gameId.toString(), 'current:', state.gameId.toString(), 'match:', account.gameId.toString() === state.gameId.toString());
@@ -120,12 +122,29 @@ async function fetchMasterRecords(
     const owner = (account.owner as PublicKey).toString();
     const stored = (account.totalReignTime as BN).toNumber();
     const isCurrent = owner === state.currentMaster && state.currentMaster !== NULL_PUBLIC_KEY;
-    // When the epoch is over, freeze all times at their stored on-chain values only.
-    // The current master's final reign will be committed by close_epoch; until then
-    // we show the already-committed totals so no entry keeps ticking.
-    const ongoing = isCurrent && !isOver ? Math.max(0, now - state.masterSince) : 0;
+    if (isCurrent) currentMasterFound = true;
+    // Active epoch: add live reign time. Ended epoch: add final reign capped at the
+    // epoch boundary so the current master's uncommitted time is shown correctly even
+    // before close_epoch runs (which is when their stored value gets updated on-chain).
+    let ongoing: number;
+    if (isCurrent && !isOver) {
+      ongoing = Math.max(0, now - state.masterSince);
+    } else if (isCurrent && isOver && epochEndTime !== null) {
+      ongoing = Math.max(0, epochEndTime - state.masterSince);
+    } else {
+      ongoing = 0;
+    }
     const reignTime = stored + ongoing;
     if (reignTime > 0) entries.push({ wallet: owner, reignTime, isCurrent });
+  }
+
+  // Guard against the case where the current master has no MasterRecord yet
+  // (e.g. they claimed in the final slot and close_epoch hasn't run).
+  if (isOver && !currentMasterFound && state.currentMaster !== NULL_PUBLIC_KEY && epochEndTime !== null) {
+    const finalReign = Math.max(0, epochEndTime - state.masterSince);
+    if (finalReign > 0) {
+      entries.push({ wallet: state.currentMaster, reignTime: finalReign, isCurrent: true });
+    }
   }
 
   return entries.sort((a, b) => b.reignTime - a.reignTime);
@@ -219,7 +238,15 @@ export function useEpochState(): UseEpochStateReturn {
 
       // Phase 4: fetch real leaderboard from MasterRecord PDAs
       try {
-        const entries = await fetchMasterRecords(connection, state, isOver);
+        // Approximate the epoch boundary timestamp so the current master's uncommitted
+        // final reign can be shown correctly when isOver = true.
+        let epochEndTime: number | null = null;
+        if (isOver) {
+          const epochsElapsed = currentNetworkEpoch - state.gameEpoch;
+          const slotsSinceEnd = (epochsElapsed - 1) * netEpochInfo.slotsInEpoch + netEpochInfo.slotIndex;
+          epochEndTime = Math.floor(Date.now() / 1000) - Math.round((slotsSinceEnd * AVG_SLOT_MS) / 1000);
+        }
+        const entries = await fetchMasterRecords(connection, state, isOver, epochEndTime);
         setLeaderboard(entries);
       } catch (lbErr) {
         console.error('[MOTE] leaderboard fetch error:', lbErr);
