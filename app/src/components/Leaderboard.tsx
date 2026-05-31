@@ -8,7 +8,6 @@ interface LeaderboardProps {
   isLoading: boolean;
   epochState: EpochStateData | null;
   isEpochOver: boolean;
-  computedWinner: string | null;
 }
 
 const RANK_COLORS = ['#fbbf24', '#94a3b8', '#c2956c', '#7c3aed', '#7c3aed'];
@@ -29,16 +28,17 @@ function ReignBar({ percent }: { percent: number }) {
   );
 }
 
-export function Leaderboard({ entries, isLoading, epochState, isEpochOver, computedWinner }: LeaderboardProps) {
+export function Leaderboard({ entries, isLoading, epochState, isEpochOver }: LeaderboardProps) {
   const { getNickname } = useNicknames();
   const totalTime = entries.reduce((sum, e) => sum + e.reignTime, 0) || 1;
 
-  // When epoch is over, the M badge belongs to the computed winner (mirrors close_epoch.rs).
-  // During live play it belongs to the current master (entry.isCurrent).
+  // When the epoch is over, the MASTER badge belongs to the leading master (winner by
+  // accumulated reign time).  During live play it belongs to the current master.
+  // Fall back to currentMaster if leadingMaster is still the null pubkey (single-player game).
   const masterBadgeWallet = isEpochOver && epochState
-    ? (computedWinner ?? (epochState.leadingMaster !== NULL_PUBLIC_KEY
+    ? (epochState.leadingMaster !== NULL_PUBLIC_KEY
         ? epochState.leadingMaster
-        : epochState.currentMaster))
+        : epochState.currentMaster)
     : null; // null → use entry.isCurrent (live play)
 
   return (

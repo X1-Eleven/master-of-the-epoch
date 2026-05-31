@@ -28,7 +28,7 @@ const WalletProvider = _WalletProvider as FC<{ children: ReactNode; wallets: any
 function AppContent() {
   const { publicKey, connected } = useWallet();
   const { setNickname } = useNicknames();
-  const { epochState, epochInfo, leaderboard, computedWinner, isLoading, error, refresh } = useEpochState();
+  const { epochState, epochInfo, leaderboard, isLoading, error, refresh } = useEpochState();
 
   // Nickname modal state: null = closed, otherwise {address, initial}
   const [nicknameModal, setNicknameModal] = useState<{ address: string; initial: string } | null>(null);
@@ -102,7 +102,6 @@ function AppContent() {
           isLoading={isLoading}
           isEpochOver={isEpochOver}
           isClosed={isClosed}
-          computedWinner={computedWinner}
           onRefresh={refresh}
         />
 
@@ -114,7 +113,7 @@ function AppContent() {
           isLoading={isLoading}
         />
 
-        <Leaderboard entries={leaderboard} isLoading={isLoading} epochState={epochState} isEpochOver={isEpochOver} computedWinner={computedWinner} />
+        <Leaderboard entries={leaderboard} isLoading={isLoading} epochState={epochState} isEpochOver={isEpochOver} />
 
         <HallOfMasters />
       </main>

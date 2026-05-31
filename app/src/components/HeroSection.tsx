@@ -16,7 +16,6 @@ interface HeroSectionProps {
   isLoading: boolean;
   isEpochOver: boolean;
   isClosed: boolean;
-  computedWinner: string | null;
   onRefresh: () => void;
 }
 
@@ -56,7 +55,7 @@ function ShareButton() {
 }
 
 export function HeroSection({
-  epochState, epochInfo, isLoading, isEpochOver, isClosed, computedWinner, onRefresh,
+  epochState, epochInfo, isLoading, isEpochOver, isClosed, onRefresh,
 }: HeroSectionProps) {
   const { connected, publicKey, signTransaction } = useWallet();
   const { setVisible } = useWalletModal();
@@ -80,11 +79,10 @@ export function HeroSection({
   const isCurrentMaster = connected && publicKey && epochState?.currentMaster === publicKey.toString();
   const gameNotStarted = epochState?.gameEpoch === 0;
 
-  // When epoch is over, show the computed winner (mirrors close_epoch.rs logic exactly).
-  // Falls back to currentMaster during live play.
+  // Bug 3: when epoch is over, display the leading master (winner); fall back to currentMaster
   const displayedMaster = !hasNoMaster
-    ? (isEpochOver && computedWinner != null
-        ? computedWinner
+    ? (isEpochOver && epochState!.leadingMaster !== NULL_PUBLIC_KEY
+        ? epochState!.leadingMaster
         : epochState!.currentMaster)
     : NULL_PUBLIC_KEY;
 
