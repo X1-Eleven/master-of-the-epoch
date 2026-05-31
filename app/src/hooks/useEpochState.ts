@@ -43,6 +43,7 @@ export interface UseEpochStateReturn {
   epochState: EpochStateData | null;
   epochInfo: EpochInfo | null;
   leaderboard: LeaderboardEntry[];
+  computedWinner: string | null;
   isLoading: boolean;
   error: string | null;
   refresh: () => void;
@@ -103,7 +104,8 @@ async function fetchMasterRecords(
   connection: Connection,
   state: EpochStateData,
   isOver: boolean,
-): Promise<LeaderboardEntry[]> {
+  epochStartTs: number | null,
+): Promise<{ entries: LeaderboardEntry[]; computedWinner: string | null }> {
   const program = makeReadProgram(connection);
 
   // Fetch all MasterRecord accounts and filter client-side to avoid byte-offset
@@ -113,6 +115,7 @@ async function fetchMasterRecords(
 
   const now = Math.floor(Date.now() / 1000);
   const entries: LeaderboardEntry[] = [];
+  let computedWinner: string | null = null;
 
   for (const { account } of allRecords) {
     console.log('[MOTE] record gameId:', account.gameId.toString(), 'current:', state.gameId.toString(), 'match:', account.gameId.toString() === state.gameId.toString());
@@ -126,15 +129,33 @@ async function fetchMasterRecords(
     const ongoing = isCurrent && !isOver ? Math.max(0, now - state.masterSince) : 0;
     const reignTime = stored + ongoing;
     if (reignTime > 0) entries.push({ wallet: owner, reignTime, isCurrent });
+
+    // Mirror close_epoch.rs winner logic exactly when epoch is over
+    if (isOver && isCurrent && epochStartTs !== null) {
+      const reignEnd = Math.max(epochStartTs, state.masterSince);
+      const finalReign = Math.max(0, reignEnd - state.masterSince);
+      const finalMasterTotal = stored + finalReign;
+      computedWinner = finalMasterTotal >= state.leadingMasterTime
+        ? state.currentMaster
+        : (state.leadingMaster !== NULL_PUBLIC_KEY ? state.leadingMaster : state.currentMaster);
+    }
   }
 
-  return entries.sort((a, b) => b.reignTime - a.reignTime);
+  // Fallback when epoch is over but winner couldn't be computed (missing record or timestamp)
+  if (isOver && computedWinner === null) {
+    computedWinner = state.currentMaster === NULL_PUBLIC_KEY
+      ? (state.leadingMaster !== NULL_PUBLIC_KEY ? state.leadingMaster : null)
+      : (state.leadingMaster !== NULL_PUBLIC_KEY ? state.leadingMaster : state.currentMaster);
+  }
+
+  return { entries: entries.sort((a, b) => b.reignTime - a.reignTime), computedWinner };
 }
 
 export function useEpochState(): UseEpochStateReturn {
   const [epochState, setEpochState] = useState<EpochStateData | null>(null);
   const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [computedWinner, setComputedWinner] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -185,6 +206,7 @@ export function useEpochState(): UseEpochStateReturn {
       usingMockRef.current = false;
       setEpochState(null);
       setLeaderboard([]);
+      setComputedWinner(null);
       setEpochInfo({
         secondsRemaining: null,
         isOver: false,
@@ -217,13 +239,29 @@ export function useEpochState(): UseEpochStateReturn {
       });
       setError(null);
 
-      // Phase 4: fetch real leaderboard from MasterRecord PDAs
+      // Phase 4: fetch epoch start timestamp for winner computation when epoch is over
+      let epochStartTs: number | null = null;
+      if (isOver && state.currentMaster !== NULL_PUBLIC_KEY) {
+        try {
+          const epochStartSlot = netEpochInfo.absoluteSlot - netEpochInfo.slotIndex;
+          const ts = await connection.getBlockTime(epochStartSlot);
+          epochStartTs = ts !== null
+            ? ts
+            : Math.floor(Date.now() / 1000) - Math.floor(netEpochInfo.slotIndex * AVG_SLOT_MS / 1000);
+        } catch {
+          // epochStartTs remains null; winner computation falls back to leadingMaster
+        }
+      }
+
+      // Phase 5: fetch real leaderboard from MasterRecord PDAs
       try {
-        const entries = await fetchMasterRecords(connection, state, isOver);
+        const { entries, computedWinner: winner } = await fetchMasterRecords(connection, state, isOver, epochStartTs);
         setLeaderboard(entries);
+        setComputedWinner(winner);
       } catch (lbErr) {
         console.error('[MOTE] leaderboard fetch error:', lbErr);
         setLeaderboard([]);
+        setComputedWinner(null);
       }
     } catch (decodeErr) {
       console.error('[MOTE] account decode error:', decodeErr);
@@ -240,7 +278,7 @@ export function useEpochState(): UseEpochStateReturn {
     return () => clearInterval(id);
   }, [fetchState]);
 
-  return { epochState, epochInfo, leaderboard, isLoading, error, refresh: fetchState };
+  return { epochState, epochInfo, leaderboard, computedWinner, isLoading, error, refresh: fetchState };
 }
 
 export function computeClaimCost(nextClaimCostLamports: number): number {
